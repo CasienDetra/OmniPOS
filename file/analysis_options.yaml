@@ -1,0 +1,16 @@
+include: package:dart_frog_lint/recommended.yaml
+
+analyzer:
+  errors:
+    todo: ignore
+
+linter:
+  rules:
+    # Application project, not a published package.
+    public_member_api_docs: false
+    always_use_package_imports: false
+    # Error boundary legitimately converts Mongo driver errors to envelopes.
+    avoid_catching_errors: false
+    avoid_slow_async_io: false
+    avoid_print: false
+    avoid_redundant_argument_values: false

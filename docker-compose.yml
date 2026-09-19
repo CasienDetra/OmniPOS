@@ -1,0 +1,42 @@
+name: pos
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+
+  file:
+    build: ./file
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      MONGODB_URI: mongodb://mongo:27017/pos
+      UPLOAD_DIR: public/uploads
+    volumes:
+      - file-uploads:/app/public/uploads
+    depends_on:
+      - mongo
+    ports:
+      - "8080:8080"
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+      MONGODB_URI: mongodb://mongo:27017/pos
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      FILE_BASE_URL: http://file:8080
+    depends_on:
+      - mongo
+      - file
+    ports:
+      - "3000:3000"
+
+volumes:
+  mongo-data:
+  file-uploads:
