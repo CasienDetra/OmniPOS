@@ -86,6 +86,8 @@ POST   /api/cashier/ordering/order      checkout {"cart": "{\"<productId>\": qty
 GET    /api/cashier/sales               own sales only
 GET/DELETE /api/cashier/sales/:id
 
+GET    /api/reports/invoice/:id        invoice PDF (admin: any order, cashier: own only)
+
 GET    /api/testing/basic               public echo endpoint (no auth)
 POST   /api/testing/upload/file         public base64 upload proxy to file service
 ```

@@ -17,6 +17,7 @@ export 'src/services/auth_service.dart';
 export 'src/services/counter_service.dart';
 export 'src/services/dashboard_service.dart';
 export 'src/services/file_service.dart';
+export 'src/services/invoice_pdf_service.dart';
 export 'src/services/order_service.dart';
 export 'src/services/product_service.dart';
 export 'src/services/product_type_service.dart';

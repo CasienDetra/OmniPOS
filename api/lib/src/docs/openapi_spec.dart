@@ -43,6 +43,9 @@ const openApiSpecJson = r'''
       "name": "Admin / Dashboard"
     },
     {
+      "name": "Reports"
+    },
+    {
       "name": "Testing"
     }
   ],
@@ -642,6 +645,39 @@ const openApiSpecJson = r'''
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/reports/invoice/{id}": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Download invoice PDF for an order",
+        "description": "Returns an A4 invoice PDF with shaped Khmer text. Admins may request any order; cashiers only their own.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice PDF",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
                 }
               }
             }
