@@ -100,6 +100,28 @@ POST /api/file/upload-base64    {"folder": "...", "image": "data:image/png;base6
 GET  /api/file/<filename>       stream file (?download=true → attachment)
 ```
 
+## Testing
+
+Three layers, all runnable from `api/` with the stack up (`docker compose up -d`):
+
+```bash
+dart test                 # 59 tests: unit + authz integration vs live server
+dart run scripts/smoke.dart   # 12-step E2E smoke, exits 1 on failure
+```
+
+* `test/unit/` — pure logic: JWT round-trip and tampering, bcrypt, validators,
+  pagination, order/price snapshot models, invoice PDF rendering.
+* `test/integration/authz_test.dart` — HTTP against a running instance
+  (`API_BASE_URL` overrides, default `http://localhost:3000`); auto-skips when
+  the server is unreachable. Covers 401/403 rules, checkout validation, the
+  order lifecycle and sequential receipt numbers. Test data is prefixed
+  `zz-test-` and deleted again in teardown.
+* `scripts/smoke.dart` — one-shot demo flow with a PASS/FAIL line per step.
+
+Postman: import `postman/OmniPOS.postman_collection.json`, run folders top to
+bottom. Tokens are captured automatically into collection variables; the
+Cleanup folder (30–33) removes everything the flow created.
+
 ## Design notes (vs. the NestJS/Sequelize reference)
 
 * Users embed `roles: [{id, name, is_default}]` instead of a pivot table.
