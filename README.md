@@ -46,6 +46,11 @@ formatting, analysis and compilation behave identically everywhere. Bump the
 `.github/workflows/ci.yml` together, then re-run `dart format` across both
 packages — the CI gate is strict.
 
+Run `dart pub get` in the package before formatting it. The formatter resolves
+each file's language version through the package configuration; without it a
+few long string literals wrap differently and the gate disagrees with your
+commit, which is why CI formats after installing dependencies.
+
 * `ci.yml` — per service: `dart pub get`, `dart format --set-exit-if-changed`,
   `dart analyze`, `dart test` (integration tests self-skip without a server).
 * `e2e.yml` — builds the real images, boots compose, seeds, then runs
