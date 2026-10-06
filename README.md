@@ -25,6 +25,7 @@ If MongoDB is unreachable the global error boundary returns
 
 ```bash
 cd POS
+cp .env.example .env      # then set JWT_SECRET: openssl rand -base64 48
 docker compose up --build -d
 docker compose exec api /app/seed    # indexes + demo data
 docker compose exec file /app/seed   # files collection index
@@ -32,10 +33,32 @@ docker compose exec file /app/seed   # files collection index
 
 * API: http://localhost:3000 · File service: http://localhost:8080 (playground page at `/`)
 * Seeded accounts: `admin@pos.local / admin123` (Admin) and `cashier@pos.local / cashier123` (Cashier).
+* `JWT_SECRET` has no default — compose refuses to start the API without it,
+  so a placeholder secret can never sign real tokens.
+* MongoDB is published on `127.0.0.1` only; the services reach it on the
+  compose network. `api` and `file` wait on the mongo healthcheck before start.
+
+## Toolchain and CI
+
+Base images and CI share one pinned Dart toolchain (`dart:3.13.4`) so
+formatting, analysis and compilation behave identically everywhere. Bump the
+`dart:3.13.4` tag in `api/Dockerfile`, `file/Dockerfile` and both jobs of
+`.github/workflows/ci.yml` together, then re-run `dart format` across both
+packages — the CI gate is strict.
+
+* `ci.yml` — per service: `dart pub get`, `dart format --set-exit-if-changed`,
+  `dart analyze`, `dart test` (integration tests self-skip without a server).
+* `e2e.yml` — builds the real images, boots compose, seeds, then runs
+  `test/integration` and `scripts/smoke.dart` against the live stack.
+* `api/Dockerfile` runs `dart test test/unit` before compiling, so a failing
+  suite never produces an image.
+* `.dockerignore` in each service keeps `.env` and local build output out of
+  the image.
 
 ## Run locally (dev)
 
-Requires Dart SDK and `dart_frog_cli` (`dart pub global activate dart_frog_cli`).
+Requires the pinned Dart SDK (3.13.4) and `dart_frog_cli`
+(`dart pub global activate dart_frog_cli 1.2.14`).
 
 ```bash
 cd POS/file && cp .env.example .env && dart pub get && dart_frog dev --port 8080
