@@ -51,33 +51,38 @@ Future<String> login(String username, String password) async {
   return (jsonOf(res)['data'] as Map)['token'] as String;
 }
 
-void main() {
-  var serverReady = false;
+/// Reason to skip the whole suite, or null when a server answers.
+Future<String?> probeServer() async {
+  try {
+    final probe = await call(
+      'GET',
+      '/api/testing/basic',
+    ).timeout(const Duration(seconds: 3));
+    if (probe.statusCode != 200) {
+      return 'POS api answered ${probe.statusCode} at $base';
+    }
+    return null;
+  } catch (_) {
+    return 'POS api not reachable at $base — run `docker compose up -d` first';
+  }
+}
+
+Future<void> main() async {
+  // Registered before any test: an unreachable server skips the suite instead
+  // of failing every request with a socket error.
+  final unreachable = await probeServer();
+  if (unreachable != null) {
+    test('POS api authorization suite', () {}, skip: unreachable);
+    return;
+  }
 
   setUpAll(() async {
-    try {
-      final probe = await call(
-        'GET',
-        '/api/testing/basic',
-      ).timeout(const Duration(seconds: 3));
-      if (probe.statusCode != 200) throw const SocketException('not ready');
-      serverReady = true;
-    } catch (_) {
-      markTestSkipped(
-        'POS api not reachable at $base — run `docker compose up -d` first',
-      );
-      return;
-    }
     adminToken = await login('admin@pos.local', 'admin123');
     cashierToken = await login('cashier@pos.local', 'cashier123');
   });
 
-  setUp(() {
-    if (!serverReady) markTestSkipped('server not reachable');
-  });
-
   tearDownAll(() async {
-    if (!serverReady || adminToken.isEmpty) return;
+    if (adminToken.isEmpty) return;
     for (final id in placedOrderIds) {
       await call('DELETE', '/api/admin/sales/$id', token: adminToken);
     }
