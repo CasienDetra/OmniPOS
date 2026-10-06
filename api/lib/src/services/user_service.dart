@@ -32,11 +32,8 @@ class UserService {
       limit: limit,
     );
     return {
-      'data': [
-        for (final doc in docs) User.fromDocument(doc).toJson(),
-      ],
-      'pagination':
-          buildPagination(page: page, limit: limit, total: total),
+      'data': [for (final doc in docs) User.fromDocument(doc).toJson()],
+      'pagination': buildPagination(page: page, limit: limit, total: total),
     };
   }
 
@@ -177,7 +174,10 @@ class UserService {
   }
 
   Future<void> changePassword(
-      ObjectId id, String oldPassword, String newPassword) async {
+    ObjectId id,
+    String oldPassword,
+    String newPassword,
+  ) async {
     final doc = await findDoc('users', {'_id': id});
     if (doc == null) {
       throw const UnauthorizedException('Account no longer exists');

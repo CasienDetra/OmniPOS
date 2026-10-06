@@ -22,13 +22,16 @@ class RoleEntry {
   final bool isDefault;
 
   static RoleEntry fromMap(Map<String, dynamic> map) => RoleEntry(
-        id: (map['id'] as num).toInt(),
-        name: map['name'] as String? ?? Role.names[map['id']] ?? 'Unknown',
-        isDefault: map['is_default'] == true,
-      );
+    id: (map['id'] as num).toInt(),
+    name: map['name'] as String? ?? Role.names[map['id']] ?? 'Unknown',
+    isDefault: map['is_default'] == true,
+  );
 
-  Map<String, Object?> toMap() =>
-      {'id': id, 'name': name, 'is_default': isDefault};
+  Map<String, Object?> toMap() => {
+    'id': id,
+    'name': name,
+    'is_default': isDefault,
+  };
 }
 
 /// Authenticated identity extracted from the bearer token and provided to
@@ -46,8 +49,7 @@ class AuthUser {
   factory AuthUser.fromJwt(Map<String, dynamic> user) {
     final roles = [
       for (final role in (user['roles'] as List? ?? const []))
-        if (role is Map)
-          RoleEntry.fromMap(Map<String, dynamic>.from(role)),
+        if (role is Map) RoleEntry.fromMap(Map<String, dynamic>.from(role)),
     ];
     return AuthUser(
       id: user['id'] as String,

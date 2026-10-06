@@ -25,7 +25,8 @@ Future<Response> onRequest(RequestContext context) async {
     decoded = decodeBase64Image(image);
     if (decoded == null) {
       errors.add(
-          'image must be a base64 data URL of a png, jpg, jpeg or gif image');
+        'image must be a base64 data URL of a png, jpg, jpeg or gif image',
+      );
     }
   }
   if (errors.isNotEmpty) {

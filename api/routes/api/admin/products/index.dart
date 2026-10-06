@@ -51,8 +51,7 @@ Future<Response> _post(RequestContext context) async {
     unitPrice: unitPrice,
     image: image,
     creatorId: asObjectId(auth.id),
-    isActive:
-        body['is_active'] == null ? true : _boolFrom(body['is_active']),
+    isActive: body['is_active'] == null ? true : _boolFrom(body['is_active']),
   );
   return jsonSuccess(
     await _service.getJson(idHex(product.id!)),

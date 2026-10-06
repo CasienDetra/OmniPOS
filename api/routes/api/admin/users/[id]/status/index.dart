@@ -16,7 +16,10 @@ Future<Response> _put(RequestContext context, String id) async {
     throw InvalidEntityException(['is_active is required']);
   }
   final isActive =
-      raw == true || raw == 1 || raw == '1' || raw.toString().toLowerCase() == 'true';
+      raw == true ||
+      raw == 1 ||
+      raw == '1' ||
+      raw.toString().toLowerCase() == 'true';
   await const UserService().setActive(id, isActive);
   final user = await const UserService().get(id);
   return jsonSuccess(user.toJson(), message: 'User status has been updated.');

@@ -20,7 +20,7 @@ const _productSortFields = {
 
 class ProductService {
   ProductService({FileService? fileService})
-      : _fileService = fileService ?? FileService();
+    : _fileService = fileService ?? FileService();
 
   final FileService _fileService;
 
@@ -39,9 +39,7 @@ class ProductService {
       'productTypes': [
         for (final doc in types) ProductType.fromDocument(doc).toRefJson(),
       ],
-      'users': [
-        for (final doc in users) User.fromDocument(doc).toRefJson(),
-      ],
+      'users': [for (final doc in users) User.fromDocument(doc).toRefJson()],
     };
   }
 
@@ -129,8 +127,9 @@ class ProductService {
     bool isActive = true,
   }) async {
     await _ensureCodeUnique(code);
-    final imageUrl =
-        (image == null || image.isEmpty) ? '' : await _uploadImage(image);
+    final imageUrl = (image == null || image.isEmpty)
+        ? ''
+        : await _uploadImage(image);
     final now = DateTime.now().toUtc();
     final product = Product(
       name: name,
@@ -207,7 +206,10 @@ class ProductService {
   }
 
   Future<Map<String, String>> _lookupNames(
-      String collection, List<Map<String, dynamic>> docs, String field) async {
+    String collection,
+    List<Map<String, dynamic>> docs,
+    String field,
+  ) async {
     final ids = docs
         .map((doc) => doc[field])
         .whereType<ObjectId>()
@@ -216,7 +218,9 @@ class ProductService {
     if (ids.isEmpty) return const {};
     final found = await findPage(
       collection: collection,
-      filter: {'_id': {r'$in': ids}},
+      filter: {
+        '_id': {r'$in': ids},
+      },
       limit: ids.length,
     );
     return {

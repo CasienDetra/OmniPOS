@@ -17,17 +17,17 @@ class Product {
   });
 
   static Product fromDocument(Map<String, dynamic> doc) => Product(
-        id: doc['_id'] as ObjectId?,
-        name: doc['name'] as String? ?? '',
-        code: doc['code'] as String? ?? '',
-        typeId: doc['type_id'] as ObjectId?,
-        unitPrice: (doc['unit_price'] as num?)?.toDouble() ?? 0,
-        image: doc['image'] as String? ?? '',
-        isActive: doc['is_active'] != false,
-        creatorId: doc['creator_id'] as ObjectId?,
-        createdAt: doc['created_at'] as DateTime? ?? DateTime.now(),
-        updatedAt: doc['updated_at'] as DateTime? ?? DateTime.now(),
-      );
+    id: doc['_id'] as ObjectId?,
+    name: doc['name'] as String? ?? '',
+    code: doc['code'] as String? ?? '',
+    typeId: doc['type_id'] as ObjectId?,
+    unitPrice: (doc['unit_price'] as num?)?.toDouble() ?? 0,
+    image: doc['image'] as String? ?? '',
+    isActive: doc['is_active'] != false,
+    creatorId: doc['creator_id'] as ObjectId?,
+    createdAt: doc['created_at'] as DateTime? ?? DateTime.now(),
+    updatedAt: doc['updated_at'] as DateTime? ?? DateTime.now(),
+  );
 
   final ObjectId? id;
   final String name;
@@ -41,32 +41,29 @@ class Product {
   final DateTime updatedAt;
 
   Map<String, Object?> toDocument() => {
-        'name': name,
-        'code': code,
-        'type_id': typeId,
-        'unit_price': unitPrice,
-        'image': image,
-        'is_active': isActive,
-        'creator_id': creatorId,
-        'created_at': createdAt.toUtc(),
-        'updated_at': updatedAt.toUtc(),
-      };
+    'name': name,
+    'code': code,
+    'type_id': typeId,
+    'unit_price': unitPrice,
+    'image': image,
+    'is_active': isActive,
+    'creator_id': creatorId,
+    'created_at': createdAt.toUtc(),
+    'updated_at': updatedAt.toUtc(),
+  };
 
-  Map<String, Object?> toJson({
-    String? typeName,
-    String? creatorName,
-  }) => {
-        'id': idHex(id),
-        'name': name,
-        'code': code,
-        'type_id': idHex(typeId),
-        'type_name': typeName,
-        'unit_price': unitPrice,
-        'image': image,
-        'is_active': isActive,
-        'creator_id': idHex(creatorId),
-        'creator_name': creatorName,
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
-      };
+  Map<String, Object?> toJson({String? typeName, String? creatorName}) => {
+    'id': idHex(id),
+    'name': name,
+    'code': code,
+    'type_id': idHex(typeId),
+    'type_name': typeName,
+    'unit_price': unitPrice,
+    'image': image,
+    'is_active': isActive,
+    'creator_id': idHex(creatorId),
+    'creator_name': creatorName,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+  };
 }

@@ -28,7 +28,8 @@ Future<Response> onRequest(RequestContext context, String filename) async {
       ...corsHeaders,
       HttpHeaders.contentTypeHeader: record.mimetype,
       HttpHeaders.contentLengthHeader: '${record.size}',
-      if (download) 'content-disposition': 'attachment; filename="${record.originalname}"',
+      if (download)
+        'content-disposition': 'attachment; filename="${record.originalname}"',
     },
   );
 }

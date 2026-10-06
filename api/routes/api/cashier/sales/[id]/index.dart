@@ -13,8 +13,7 @@ final _service = OrderService();
 
 Future<Response> _get(RequestContext context, String id) async {
   final auth = authUser(context);
-  final order =
-      await _service.getFor(rawId: id, cashier: asObjectId(auth.id));
+  final order = await _service.getFor(rawId: id, cashier: asObjectId(auth.id));
   return jsonSuccess(order.toJson(cashierName: auth.name));
 }
 

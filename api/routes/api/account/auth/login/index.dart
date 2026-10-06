@@ -27,8 +27,7 @@ Future<Response> _post(RequestContext context) async {
   );
 
   const tokens = TokenService();
-  return jsonSuccess(
-    {'token': tokens.generate(user)},
-    message: 'Logged in successfully',
-  );
+  return jsonSuccess({
+    'token': tokens.generate(user),
+  }, message: 'Logged in successfully');
 }

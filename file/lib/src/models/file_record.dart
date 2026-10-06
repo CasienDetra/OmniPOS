@@ -18,14 +18,14 @@ class FileRecord {
   final DateTime createdAt;
 
   Map<String, Object?> toDocument() => {
-        'filename': filename,
-        'originalname': originalname,
-        'mimetype': mimetype,
-        'size': size,
-        'encoding': encoding,
-        'path': path,
-        'created_at': createdAt.toUtc(),
-      };
+    'filename': filename,
+    'originalname': originalname,
+    'mimetype': mimetype,
+    'size': size,
+    'encoding': encoding,
+    'path': path,
+    'created_at': createdAt.toUtc(),
+  };
 
   static FileRecord? fromDocument(Map<String, dynamic>? doc) {
     if (doc == null) return null;
@@ -42,11 +42,11 @@ class FileRecord {
   }
 
   Map<String, Object?> uploadData() => {
-        'uri': 'api/file/$filename',
-        'filename': filename,
-        'originalname': originalname,
-        'mimetype': mimetype,
-        'size': size,
-        'encoding': encoding,
-      };
+    'uri': 'api/file/$filename',
+    'filename': filename,
+    'originalname': originalname,
+    'mimetype': mimetype,
+    'size': size,
+    'encoding': encoding,
+  };
 }

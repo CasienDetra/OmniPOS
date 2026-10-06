@@ -11,7 +11,9 @@ class CounterService {
     final counters = db.collection('counters');
     await counters.updateOne(
       {'_id': 'receipt'},
-      {r'$inc': {'seq': 1}},
+      {
+        r'$inc': {'seq': 1},
+      },
       upsert: true,
     );
     final doc = await counters.findOne({'_id': 'receipt'});

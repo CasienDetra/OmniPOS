@@ -63,20 +63,28 @@ class InvoicePdfService {
       child: pw.Row(
         children: [
           pw.Expanded(
-            child: KhmerText('បង្កើតនៅៈ ${_formatDate(order['ordered_at'])}',
-                style: base),
+            child: KhmerText(
+              'បង្កើតនៅៈ ${_formatDate(order['ordered_at'])}',
+              style: base,
+            ),
           ),
           pw.Expanded(
-            child: KhmerText('អ្នកគិតលុយៈ ${order['cashier_name'] ?? ''}',
-                style: base, textAlign: pw.TextAlign.right),
+            child: KhmerText(
+              'អ្នកគិតលុយៈ ${order['cashier_name'] ?? ''}',
+              style: base,
+              textAlign: pw.TextAlign.right,
+            ),
           ),
         ],
       ),
     );
   }
 
-  pw.Widget _itemsTable(pw.TextStyle base, List<Map<String, Object?>> items,
-      Map<String, Object?> order) {
+  pw.Widget _itemsTable(
+    pw.TextStyle base,
+    List<Map<String, Object?>> items,
+    Map<String, Object?> order,
+  ) {
     final header = ['ឈ.រ', 'ផលិតផល', 'តម្លៃ (រៀល)', 'ចំនួន', 'សរុប'];
     final cell = pw.EdgeInsets.all(5);
     return pw.Container(
@@ -106,22 +114,25 @@ class InvoicePdfService {
             pw.TableRow(
               children: [
                 pw.Padding(
-                    padding: cell,
-                    child: KhmerText('${i + 1}', style: base)),
+                  padding: cell,
+                  child: KhmerText('${i + 1}', style: base),
+                ),
                 pw.Padding(
-                    padding: cell,
-                    child: KhmerText('${items[i]['name']}', style: base)),
+                  padding: cell,
+                  child: KhmerText('${items[i]['name']}', style: base),
+                ),
                 pw.Padding(
-                    padding: cell,
-                    child: KhmerText(_money(items[i]['unit_price']),
-                        style: base)),
+                  padding: cell,
+                  child: KhmerText(_money(items[i]['unit_price']), style: base),
+                ),
                 pw.Padding(
-                    padding: cell,
-                    child: KhmerText('${items[i]['qty']}', style: base)),
+                  padding: cell,
+                  child: KhmerText('${items[i]['qty']}', style: base),
+                ),
                 pw.Padding(
-                    padding: cell,
-                    child: KhmerText(_money(items[i]['line_price']),
-                        style: base)),
+                  padding: cell,
+                  child: KhmerText(_money(items[i]['line_price']), style: base),
+                ),
               ],
             ),
           pw.TableRow(
@@ -129,8 +140,11 @@ class InvoicePdfService {
               pw.SizedBox(),
               pw.Container(
                 padding: cell,
-                child: KhmerText('តម្លៃសរុប (រៀល):',
-                    style: base, textAlign: pw.TextAlign.right),
+                child: KhmerText(
+                  'តម្លៃសរុប (រៀល):',
+                  style: base,
+                  textAlign: pw.TextAlign.right,
+                ),
               ),
               pw.SizedBox(),
               pw.SizedBox(),
@@ -152,9 +166,10 @@ class InvoicePdfService {
   }
 
   pw.Widget _divider() => pw.Container(
-      height: 1,
-      color: _line,
-      margin: const pw.EdgeInsets.symmetric(vertical: 2));
+    height: 1,
+    color: _line,
+    margin: const pw.EdgeInsets.symmetric(vertical: 2),
+  );
 
   String _formatDate(Object? iso) {
     if (iso is! String || iso.isEmpty) return '';

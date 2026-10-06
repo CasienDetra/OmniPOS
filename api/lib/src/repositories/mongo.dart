@@ -24,19 +24,26 @@ Future<List<Map<String, dynamic>>> findPage({
       .toList();
 }
 
-Future<int> countDocs(String collection, [Map<String, Object?> filter = const {}]) async {
+Future<int> countDocs(
+  String collection, [
+  Map<String, Object?> filter = const {},
+]) async {
   final db = await MongoDb.instance.database;
   return db.collection(collection).count(filter);
 }
 
 Future<Map<String, dynamic>?> findDoc(
-    String collection, Map<String, Object?> filter) async {
+  String collection,
+  Map<String, Object?> filter,
+) async {
   final db = await MongoDb.instance.database;
   return db.collection(collection).findOne(filter);
 }
 
 Future<ObjectId> insertDoc(
-    String collection, Map<String, Object?> document) async {
+  String collection,
+  Map<String, Object?> document,
+) async {
   final db = await MongoDb.instance.database;
   final doc = Map<String, Object?>.from(document);
   final oid = ObjectId();
@@ -46,19 +53,22 @@ Future<ObjectId> insertDoc(
 }
 
 Future<int> updateById(
-    String collection, String rawId, Map<String, Object?> setFields) async {
+  String collection,
+  String rawId,
+  Map<String, Object?> setFields,
+) async {
   final db = await MongoDb.instance.database;
-  final result = await db.collection(collection).updateOne(
-        {'_id': asObjectId(rawId)},
-        {r'$set': setFields},
-      );
+  final result = await db
+      .collection(collection)
+      .updateOne({'_id': asObjectId(rawId)}, {r'$set': setFields});
   return result.nModified;
 }
 
 Future<int> deleteById(String collection, String rawId) async {
   final db = await MongoDb.instance.database;
-  final result =
-      await db.collection(collection).deleteOne({'_id': asObjectId(rawId)});
+  final result = await db.collection(collection).deleteOne({
+    '_id': asObjectId(rawId),
+  });
   return result.nRemoved;
 }
 
@@ -68,11 +78,11 @@ Future<void> deleteDocs(String collection, Map<String, Object?> filter) async {
 }
 
 Future<List<Map<String, dynamic>>> aggregate(
-    String collection, List<Map<String, Object?>> pipeline) async {
+  String collection,
+  List<Map<String, Object?>> pipeline,
+) async {
   final db = await MongoDb.instance.database;
-  return db
-      .collection(collection)
-      .aggregateToStream(
-          [for (final stage in pipeline) stage.cast<String, Object>()])
-      .toList();
+  return db.collection(collection).aggregateToStream([
+    for (final stage in pipeline) stage.cast<String, Object>(),
+  ]).toList();
 }

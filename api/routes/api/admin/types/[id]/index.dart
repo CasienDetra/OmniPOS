@@ -11,7 +11,9 @@ Future<Response> onRequest(RequestContext context, String id) async {
 }
 
 Future<Response> _get(RequestContext context, String id) async {
-  return jsonSuccess(await const ProductTypeService().get(id).then((t) => t.toJson()));
+  return jsonSuccess(
+    await const ProductTypeService().get(id).then((t) => t.toJson()),
+  );
 }
 
 Future<Response> _put(RequestContext context, String id) async {

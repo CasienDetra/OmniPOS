@@ -9,8 +9,7 @@ Future<Response> onRequest(RequestContext context) async {
   final request = context.request;
   final contentType = request.headers['content-type'] ?? '';
   if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
-    throw const BadRequestException(
-        'Expected a multipart/form-data request.');
+    throw const BadRequestException('Expected a multipart/form-data request.');
   }
 
   final formData = await request.formData();

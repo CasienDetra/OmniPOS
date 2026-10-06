@@ -14,11 +14,9 @@ Future<Response> _post(RequestContext context) async {
   final roleId = validator.requireInt(body, 'role_id');
   validator.throwIfInvalid();
 
-  final user =
-      await const AuthService().switchRole(authUser(context), roleId);
+  final user = await const AuthService().switchRole(authUser(context), roleId);
   const tokens = TokenService();
-  return jsonSuccess(
-    {'token': tokens.generate(user)},
-    message: 'Role switched successfully',
-  );
+  return jsonSuccess({
+    'token': tokens.generate(user),
+  }, message: 'Role switched successfully');
 }

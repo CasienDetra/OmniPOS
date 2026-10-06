@@ -11,7 +11,9 @@ class DashboardService {
 
     final todayAgg = await aggregate('orders', [
       {
-        r'$match': {'ordered_at': {r'$gte': startOfToday}},
+        r'$match': {
+          'ordered_at': {r'$gte': startOfToday},
+        },
       },
       {
         r'$group': {
@@ -23,7 +25,9 @@ class DashboardService {
     ]);
     final weekAgg = await aggregate('orders', [
       {
-        r'$match': {'ordered_at': {r'$gte': startOfWeek}},
+        r'$match': {
+          'ordered_at': {r'$gte': startOfWeek},
+        },
       },
       {
         r'$group': {
@@ -40,10 +44,16 @@ class DashboardService {
           '_id': r'$items.product_id',
           'name': {r'$first': r'$items.name'},
           'qty': {r'$sum': r'$items.qty'},
-          'revenue': {r'$sum': {r'$multiply': [r'$items.unit_price', r'$items.qty']}},
+          'revenue': {
+            r'$sum': {
+              r'$multiply': [r'$items.unit_price', r'$items.qty'],
+            },
+          },
         },
       },
-      {r'$sort': {'qty': -1}},
+      {
+        r'$sort': {'qty': -1},
+      },
       {r'$limit': 5},
     ]);
 

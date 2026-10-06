@@ -28,7 +28,11 @@ int queryInt(
   return value.clamp(min, max);
 }
 
-bool queryBool(Map<String, String> params, String key, {bool fallback = false}) {
+bool queryBool(
+  Map<String, String> params,
+  String key, {
+  bool fallback = false,
+}) {
   final value = params[key]?.toLowerCase();
   if (value == null || value.isEmpty) return fallback;
   return value == 'true' || value == '1';
@@ -36,8 +40,9 @@ bool queryBool(Map<String, String> params, String key, {bool fallback = false}) 
 
 /// Parses `?page&limit&key&type&creator&startDate&endDate&sort_by&order`
 /// style list query parameters into a normalized record.
-({int page, int limit, String? key, String? sort, bool ascending})
-    listQuery(RequestContext context) {
+({int page, int limit, String? key, String? sort, bool ascending}) listQuery(
+  RequestContext context,
+) {
   final params = context.request.url.queryParameters;
   return (
     page: queryInt(params, 'page', 1),
@@ -54,8 +59,11 @@ String? emptyToNull(String? value) =>
 class Validator {
   final List<String> errors = [];
 
-  String requireString(Map<String, dynamic> body, String field,
-      {int? maxLength}) {
+  String requireString(
+    Map<String, dynamic> body,
+    String field, {
+    int? maxLength,
+  }) {
     final value = body[field];
     if (value is! String || value.trim().isEmpty) {
       errors.add('$field is required');
@@ -78,8 +86,11 @@ class Validator {
     return value.trim().isEmpty ? null : value.trim();
   }
 
-  double requireNumber(Map<String, dynamic> body, String field,
-      {bool positive = false}) {
+  double requireNumber(
+    Map<String, dynamic> body,
+    String field, {
+    bool positive = false,
+  }) {
     final value = body[field];
     final number = value is num ? value.toDouble() : double.tryParse('$value');
     if (number == null) {
@@ -110,8 +121,9 @@ class Validator {
   }
 }
 
-final base64ImagePattern =
-    RegExp(r'^data:image/(png|jpg|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$');
+final base64ImagePattern = RegExp(
+  r'^data:image/(png|jpg|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$',
+);
 
 void validateBase64Image(Validator v, String? image, {bool required = true}) {
   if (image == null || image.isEmpty) {

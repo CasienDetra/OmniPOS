@@ -11,8 +11,9 @@ import '../database/mongo_db.dart';
 import '../models/file_record.dart';
 
 final folderPattern = RegExp(r'^[A-Za-z0-9-]{2,64}$');
-final base64ImagePattern =
-    RegExp(r'^data:image/(png|jpg|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$');
+final base64ImagePattern = RegExp(
+  r'^data:image/(png|jpg|jpeg|gif);base64,[A-Za-z0-9+/]+={0,2}$',
+);
 final filenamePattern = RegExp(r'^[A-Za-z0-9_-]{1,64}$');
 
 /// Validates the `folder` field the same way file-v3's express-validator did;
@@ -58,7 +59,8 @@ Future<FileRecord> saveUploadedFile({
   final maxBytes = AppConfig.current.maxUploadBytes;
   if (bytes.length > maxBytes) {
     throw const PayloadTooLargeException(
-        'File exceeds the maximum upload size of 512 MB');
+      'File exceeds the maximum upload size of 512 MB',
+    );
   }
 
   final filename = const Uuid().v4().replaceAll('-', '');

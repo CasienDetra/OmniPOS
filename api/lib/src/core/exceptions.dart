@@ -15,7 +15,7 @@ class BadRequestException extends AppException {
 
 class UnauthorizedException extends AppException {
   const UnauthorizedException([String error = 'Unauthorized'])
-      : super(401, error);
+    : super(401, error);
 }
 
 class ForbiddenException extends AppException {
@@ -32,14 +32,18 @@ class ConflictException extends AppException {
 
 class InvalidEntityException extends AppException {
   InvalidEntityException(List<String> messages)
-      : super(422, 'Invalid Entity', details: [
+    : super(
+        422,
+        'Invalid Entity',
+        details: [
           for (final message in messages) {'type': 'field', 'message': message},
-        ]);
+        ],
+      );
 }
 
 class InternalServerException extends AppException {
   const InternalServerException([String error = 'Internal server error'])
-      : super(500, error);
+    : super(500, error);
 }
 
 class BadGatewayException extends AppException {
@@ -48,5 +52,5 @@ class BadGatewayException extends AppException {
 
 class DatabaseConnectionFailedException extends AppException {
   const DatabaseConnectionFailedException()
-      : super(503, 'Database connection failed');
+    : super(503, 'Database connection failed');
 }

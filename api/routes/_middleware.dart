@@ -49,7 +49,8 @@ Handler _authGuard(Handler handler) {
   const tokens = TokenService();
   return (context) async {
     final path = '/${context.request.url.path}';
-    final isPublic = _publicPaths.contains(path) ||
+    final isPublic =
+        _publicPaths.contains(path) ||
         _publicPrefixes.any(
           (prefix) => path == prefix || path.startsWith('$prefix/'),
         );
@@ -60,7 +61,8 @@ Handler _authGuard(Handler handler) {
       final parts = header.split(' ');
       if (parts.length != 2 || parts.first.toLowerCase() != 'bearer') {
         throw const UnauthorizedException(
-            'Authorization header must be "Bearer <token>"');
+          'Authorization header must be "Bearer <token>"',
+        );
       }
       // A token is always verified when present, even on public paths.
       auth = tokens.verify(parts.last);

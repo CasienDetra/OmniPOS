@@ -9,13 +9,13 @@ class UserLog {
   });
 
   static UserLog fromDocument(Map<String, dynamic> doc) => UserLog(
-        action: doc['action'] as String? ?? '',
-        ip: doc['ip'] as String? ?? '',
-        browser: doc['browser'] as String? ?? '',
-        os: doc['os'] as String? ?? '',
-        platform: doc['platform'] as String? ?? '',
-        timestamp: doc['timestamp'] as DateTime? ?? DateTime.now(),
-      );
+    action: doc['action'] as String? ?? '',
+    ip: doc['ip'] as String? ?? '',
+    browser: doc['browser'] as String? ?? '',
+    os: doc['os'] as String? ?? '',
+    platform: doc['platform'] as String? ?? '',
+    timestamp: doc['timestamp'] as DateTime? ?? DateTime.now(),
+  );
 
   final String action;
   final String ip;
@@ -25,20 +25,20 @@ class UserLog {
   final DateTime timestamp;
 
   Map<String, Object?> toDocument() => {
-        'action': action,
-        'ip': ip,
-        'browser': browser,
-        'os': os,
-        'platform': platform,
-        'timestamp': timestamp.toUtc(),
-      };
+    'action': action,
+    'ip': ip,
+    'browser': browser,
+    'os': os,
+    'platform': platform,
+    'timestamp': timestamp.toUtc(),
+  };
 
   Map<String, Object?> toJson() => {
-        'action': action,
-        'ip': ip,
-        'browser': browser,
-        'os': os,
-        'platform': platform,
-        'timestamp': timestamp.toIso8601String(),
-      };
+    'action': action,
+    'ip': ip,
+    'browser': browser,
+    'os': os,
+    'platform': platform,
+    'timestamp': timestamp.toIso8601String(),
+  };
 }

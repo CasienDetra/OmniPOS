@@ -16,7 +16,10 @@ Future<Response> _put(RequestContext context) async {
   final newPassword = validator.requireString(body, 'new_password');
   validator.throwIfInvalid();
 
-  await const UserService()
-      .changePassword(asObjectId(auth.id), oldPassword, newPassword);
+  await const UserService().changePassword(
+    asObjectId(auth.id),
+    oldPassword,
+    newPassword,
+  );
   return jsonSuccess(null, message: 'Password updated successfully');
 }

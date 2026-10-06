@@ -150,9 +150,9 @@ class OrderService {
     return {
       'data': [
         for (final doc in docs)
-          Order.fromDocument(doc).toJson(
-            cashierName: cashierNames[doc['cashier_id']?.toString()],
-          ),
+          Order.fromDocument(
+            doc,
+          ).toJson(cashierName: cashierNames[doc['cashier_id']?.toString()]),
       ],
       'pagination': buildPagination(page: page, limit: limit, total: total),
     };

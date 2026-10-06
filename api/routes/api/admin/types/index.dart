@@ -11,8 +11,10 @@ Future<Response> onRequest(RequestContext context) async {
 
 Future<Response> _get(RequestContext context) async {
   final query = listQuery(context);
-  final result = await const ProductTypeService()
-      .list(page: query.page, limit: query.limit);
+  final result = await const ProductTypeService().list(
+    page: query.page,
+    limit: query.limit,
+  );
   return jsonSuccess(
     result['data'],
     pagination: result['pagination'] as Map<String, Object?>,

@@ -55,10 +55,11 @@ class DeviceInfo {
       }
     }
     final forwarded = headers['x-forwarded-for'];
-    final ip = (forwarded?.split(',').first.trim() ??
-            headers['x-real-ip'] ??
-            'unknown')
-        .trim();
+    final ip =
+        (forwarded?.split(',').first.trim() ??
+                headers['x-real-ip'] ??
+                'unknown')
+            .trim();
     return DeviceInfo(
       ip: ip,
       browser: browser,
@@ -138,11 +139,7 @@ class AuthService {
     }
     final roles = [
       for (final role in user.roles)
-        RoleEntry(
-          id: role.id,
-          name: role.name,
-          isDefault: role.id == roleId,
-        ),
+        RoleEntry(id: role.id, name: role.name, isDefault: role.id == roleId),
     ];
     await updateById('users', user.id!.oid, {
       'roles': [for (final role in roles) role.toMap()],
@@ -163,8 +160,10 @@ class AuthService {
     );
   }
 
-  Future<List<Map<String, Object?>>> logsOf(String userId,
-      {int limit = 20}) async {
+  Future<List<Map<String, Object?>>> logsOf(
+    String userId, {
+    int limit = 20,
+  }) async {
     final docs = await findPage(
       collection: 'user_logs',
       filter: {'user_id': asObjectId(userId)},

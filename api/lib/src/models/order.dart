@@ -11,11 +11,11 @@ class OrderItem {
   });
 
   static OrderItem fromMap(Map<String, dynamic> map) => OrderItem(
-        productId: map['product_id'] as String? ?? '',
-        name: map['name'] as String? ?? '',
-        unitPrice: (map['unit_price'] as num?)?.toDouble() ?? 0,
-        qty: (map['qty'] as num?)?.toInt() ?? 0,
-      );
+    productId: map['product_id'] as String? ?? '',
+    name: map['name'] as String? ?? '',
+    unitPrice: (map['unit_price'] as num?)?.toDouble() ?? 0,
+    qty: (map['qty'] as num?)?.toInt() ?? 0,
+  );
 
   final String productId;
   final String name;
@@ -23,19 +23,19 @@ class OrderItem {
   final int qty;
 
   Map<String, Object?> toMap() => {
-        'product_id': productId,
-        'name': name,
-        'unit_price': unitPrice,
-        'qty': qty,
-      };
+    'product_id': productId,
+    'name': name,
+    'unit_price': unitPrice,
+    'qty': qty,
+  };
 
   Map<String, Object?> toJson() => {
-        'product_id': productId,
-        'name': name,
-        'unit_price': unitPrice,
-        'qty': qty,
-        'line_price': unitPrice * qty,
-      };
+    'product_id': productId,
+    'name': name,
+    'unit_price': unitPrice,
+    'qty': qty,
+    'line_price': unitPrice * qty,
+  };
 }
 
 class Order {
@@ -50,17 +50,17 @@ class Order {
   });
 
   static Order fromDocument(Map<String, dynamic> doc) => Order(
-        id: doc['_id'] as ObjectId?,
-        receiptNumber: doc['receipt_number'] as String? ?? '',
-        cashierId: doc['cashier_id'] as ObjectId?,
-        platform: doc['platform'] as String? ?? 'Web',
-        totalPrice: (doc['total_price'] as num?)?.toDouble() ?? 0,
-        items: [
-          for (final item in (doc['items'] as List? ?? const []))
-            if (item is Map) OrderItem.fromMap(Map<String, dynamic>.from(item)),
-        ],
-        orderedAt: doc['ordered_at'] as DateTime? ?? DateTime.now(),
-      );
+    id: doc['_id'] as ObjectId?,
+    receiptNumber: doc['receipt_number'] as String? ?? '',
+    cashierId: doc['cashier_id'] as ObjectId?,
+    platform: doc['platform'] as String? ?? 'Web',
+    totalPrice: (doc['total_price'] as num?)?.toDouble() ?? 0,
+    items: [
+      for (final item in (doc['items'] as List? ?? const []))
+        if (item is Map) OrderItem.fromMap(Map<String, dynamic>.from(item)),
+    ],
+    orderedAt: doc['ordered_at'] as DateTime? ?? DateTime.now(),
+  );
 
   final ObjectId? id;
   final String receiptNumber;
@@ -71,22 +71,22 @@ class Order {
   final DateTime orderedAt;
 
   Map<String, Object?> toDocument() => {
-        'receipt_number': receiptNumber,
-        'cashier_id': cashierId,
-        'platform': platform,
-        'total_price': totalPrice,
-        'items': [for (final item in items) item.toMap()],
-        'ordered_at': orderedAt.toUtc(),
-      };
+    'receipt_number': receiptNumber,
+    'cashier_id': cashierId,
+    'platform': platform,
+    'total_price': totalPrice,
+    'items': [for (final item in items) item.toMap()],
+    'ordered_at': orderedAt.toUtc(),
+  };
 
   Map<String, Object?> toJson({String? cashierName}) => {
-        'id': idHex(id),
-        'receipt_number': receiptNumber,
-        'cashier_id': idHex(cashierId),
-        'cashier_name': cashierName,
-        'platform': platform,
-        'total_price': totalPrice,
-        'items': [for (final item in items) item.toJson()],
-        'ordered_at': orderedAt.toIso8601String(),
-      };
+    'id': idHex(id),
+    'receipt_number': receiptNumber,
+    'cashier_id': idHex(cashierId),
+    'cashier_name': cashierName,
+    'platform': platform,
+    'total_price': totalPrice,
+    'items': [for (final item in items) item.toJson()],
+    'ordered_at': orderedAt.toIso8601String(),
+  };
 }

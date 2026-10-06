@@ -15,7 +15,10 @@ class ProductTypeService {
     return [for (final doc in docs) ProductType.fromDocument(doc)];
   }
 
-  Future<Map<String, Object?>> list({required int page, required int limit}) async {
+  Future<Map<String, Object?>> list({
+    required int page,
+    required int limit,
+  }) async {
     final total = await countDocs('product_types');
     final docs = await findPage(
       collection: 'product_types',
@@ -24,9 +27,7 @@ class ProductTypeService {
       limit: limit,
     );
     return {
-      'data': [
-        for (final doc in docs) ProductType.fromDocument(doc).toJson(),
-      ],
+      'data': [for (final doc in docs) ProductType.fromDocument(doc).toJson()],
       'pagination': buildPagination(page: page, limit: limit, total: total),
     };
   }
@@ -44,12 +45,7 @@ class ProductTypeService {
     final now = DateTime.now().toUtc();
     final type = ProductType(name: name, createdAt: now, updatedAt: now);
     final id = await insertDoc('product_types', type.toDocument());
-    return ProductType(
-      id: id,
-      name: name,
-      createdAt: now,
-      updatedAt: now,
-    );
+    return ProductType(id: id, name: name, createdAt: now, updatedAt: now);
   }
 
   Future<void> update(String rawId, String name) async {
@@ -66,7 +62,8 @@ class ProductTypeService {
     final inUse = await countDocs('products', {'type_id': asObjectId(rawId)});
     if (inUse > 0) {
       throw ConflictException(
-          'Type is used by $inUse product(s); move them first');
+        'Type is used by $inUse product(s); move them first',
+      );
     }
     await deleteById('product_types', rawId);
   }

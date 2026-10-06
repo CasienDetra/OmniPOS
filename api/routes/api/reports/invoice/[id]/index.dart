@@ -15,8 +15,10 @@ Future<Response> _get(RequestContext context, String id) async {
   if (auth.hasRole(Role.admin)) {
     order = await orders.getJson(id);
   } else {
-    order = (await orders.getFor(rawId: id, cashier: asObjectId(auth.id)))
-        .toJson(cashierName: auth.name);
+    order = (await orders.getFor(
+      rawId: id,
+      cashier: asObjectId(auth.id),
+    )).toJson(cashierName: auth.name);
   }
   final bytes = await InvoicePdfService().render(order);
   return Response.bytes(

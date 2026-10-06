@@ -10,7 +10,5 @@ Future<Response> onRequest(RequestContext context) async {
 
 Future<Response> _get(RequestContext context) async {
   final users = await const UserService().allRefs();
-  return jsonSuccess([
-    for (final user in users) user.toRefJson(),
-  ]);
+  return jsonSuccess([for (final user in users) user.toRefJson()]);
 }

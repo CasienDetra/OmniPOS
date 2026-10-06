@@ -31,7 +31,8 @@ Future<Response> _put(RequestContext context, String id) async {
   if (image != null) validateBase64Image(validator, image);
   bool? isActive;
   if (body['is_active'] != null) {
-    isActive = body['is_active'] == true ||
+    isActive =
+        body['is_active'] == true ||
         body['is_active'] == 1 ||
         body['is_active'] == 'true' ||
         body['is_active'] == '1';
@@ -47,8 +48,10 @@ Future<Response> _put(RequestContext context, String id) async {
     image: image,
     isActive: isActive,
   );
-  return jsonSuccess(await _service.getJson(id),
-      message: 'Product has been updated.');
+  return jsonSuccess(
+    await _service.getJson(id),
+    message: 'Product has been updated.',
+  );
 }
 
 Future<Response> _delete(RequestContext context, String id) async {

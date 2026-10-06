@@ -29,17 +29,16 @@ Future<void> main() async {
   await _ensureProduct(drinkId, adminId, 'Es Teh Manis', 'P0003', 5000);
   await _ensureProduct(drinkId, adminId, 'Air Mineral', 'P0004', 3000);
 
-  print('pos_api seed done: admin@pos.local/admin123, '
-      'cashier@pos.local/cashier123, 2 types, 4 products.');
+  print(
+    'pos_api seed done: admin@pos.local/admin123, '
+    'cashier@pos.local/cashier123, 2 types, 4 products.',
+  );
   await MongoDb.instance.close();
 }
 
 Future<void> _createIndexes(Db db) async {
   Future<void> ensure(String collection, List<Map<String, Object>> indexes) =>
-      db.runCommand({
-        'createIndexes': collection,
-        'indexes': indexes,
-      });
+      db.runCommand({'createIndexes': collection, 'indexes': indexes});
 
   await ensure('users', [
     {
@@ -106,11 +105,7 @@ Future<ObjectId> _ensureUser({
     'is_active': true,
     'roles': [
       for (final (index, roleId) in roleIds.indexed)
-        {
-          'id': roleId,
-          'name': Role.names[roleId],
-          'is_default': index == 0,
-        },
+        {'id': roleId, 'name': Role.names[roleId], 'is_default': index == 0},
     ],
     'created_at': now,
     'updated_at': now,

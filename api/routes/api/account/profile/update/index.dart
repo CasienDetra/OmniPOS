@@ -19,8 +19,13 @@ Future<Response> _put(RequestContext context) async {
   validator.throwIfInvalid();
 
   final id = asObjectId(auth.id);
-  await const UserService()
-      .updateProfile(id, name: name, phone: phone, email: email, avatar: avatar);
+  await const UserService().updateProfile(
+    id,
+    name: name,
+    phone: phone,
+    email: email,
+    avatar: avatar,
+  );
   final user = await const AuthService().loadUser(id);
   return jsonSuccess(user.toJson(), message: 'Profile updated successfully');
 }

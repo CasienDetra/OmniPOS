@@ -13,11 +13,7 @@ String formatTimestamp(DateTime date) {
       '${pad(hours12)}:${pad(date.minute)}:${pad(date.second)} $period';
 }
 
-Response jsonSuccess(
-  Object? data, {
-  String? message,
-  int statusCode = 200,
-}) {
+Response jsonSuccess(Object? data, {String? message, int statusCode = 200}) {
   return Response.json(
     statusCode: statusCode,
     headers: corsHeaders,

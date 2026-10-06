@@ -17,7 +17,9 @@ class FileService {
   /// Uploads a base64 data-URL image to `<file>/api/file/upload-base64`
   /// and returns the payload `{uri, filename, originalname, mimetype, ...}`.
   Future<Map<String, Object?>> uploadBase64Image(
-      String folder, String base64Image) async {
+    String folder,
+    String base64Image,
+  ) async {
     late final http.Response response;
     try {
       response = await _client

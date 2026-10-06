@@ -17,8 +17,9 @@ class MongoDb {
     try {
       var db = _db;
       if (db == null) {
-        db = await Db.create(AppConfig.current.mongoUri)
-            .timeout(const Duration(seconds: 5));
+        db = await Db.create(
+          AppConfig.current.mongoUri,
+        ).timeout(const Duration(seconds: 5));
         await db.open().timeout(const Duration(seconds: 5));
         _db = db;
       }
