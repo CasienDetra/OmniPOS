@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:dotenv/dotenv.dart';
 
 class AppConfig {
@@ -34,7 +32,7 @@ class AppConfig {
     final mongoUri = directUri.isNotEmpty
         ? directUri
         : 'mongodb://$auth${read('MONGO_HOST', 'localhost')}:'
-            '${read('MONGO_PORT', '27017')}/${read('MONGO_DATABASE', 'pos_file')}';
+              '${read('MONGO_PORT', '27017')}/${read('MONGO_DATABASE', 'pos_file')}';
 
     return AppConfig(
       mongoUri: mongoUri,
