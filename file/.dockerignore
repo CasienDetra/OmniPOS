@@ -1,0 +1,13 @@
+# Build context hygiene: keep local artifacts and secrets out of the image.
+# public/ itself stays in the context — dart_frog copies it as static assets.
+.git
+.github
+.dart_tool
+.dart_frog
+build
+coverage
+.env*
+public/uploads
+*.log
+Dockerfile
+.dockerignore

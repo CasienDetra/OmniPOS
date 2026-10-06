@@ -1,15 +1,18 @@
 # Production image for the POS file service (Dart Frog).
-FROM dart:stable AS build
+#
+# Base images are pinned to match api/Dockerfile and the CI workflow, so a
+# toolchain release can never change a build behind our back.
+FROM dart:3.13.4 AS build
 WORKDIR /app
 COPY pubspec.* ./
 RUN dart pub get
 COPY . .
-RUN dart pub global activate dart_frog_cli
+RUN dart pub global activate dart_frog_cli 1.2.14
 RUN dart pub global run dart_frog_cli:dart_frog build
 RUN dart compile exe build/bin/server.dart -o /app/server
 RUN dart compile exe scripts/seed.dart -o /app/seed
 
-FROM debian:stable-slim
+FROM debian:trixie-slim
 WORKDIR /app
 COPY --from=build /app/server /app/server
 COPY --from=build /app/seed /app/seed

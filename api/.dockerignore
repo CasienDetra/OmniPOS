@@ -1,0 +1,11 @@
+# Build context hygiene: keep local artifacts and secrets out of the image.
+.git
+.github
+.dart_tool
+.dart_frog
+build
+coverage
+.env*
+*.log
+Dockerfile
+.dockerignore
