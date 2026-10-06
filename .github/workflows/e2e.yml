@@ -1,0 +1,59 @@
+name: E2E
+
+# Builds the real images, boots docker-compose, seeds, then runs the
+# integration suite and the smoke script against the live stack.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stack:
+    runs-on: ubuntu-latest
+    env:
+      # Only used by this throwaway runner; never a production secret.
+      JWT_SECRET: ci-ephemeral-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dart@v2
+        with:
+          sdk: '3.13.4'
+      - name: Build and start the stack
+        run: docker compose up -d --build
+      - name: Seed database
+        run: |
+          docker compose exec -T api /app/seed
+          docker compose exec -T file /app/seed
+      - name: Wait for API readiness
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/api/testing/basic > /dev/null; then
+              echo "API ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --tail=100 api
+          echo "API never became ready"
+          exit 1
+      - name: Integration tests (authz against the live server)
+        working-directory: api
+        run: dart test test/integration
+      - name: Smoke script
+        working-directory: api
+        run: dart run scripts/smoke.dart
+      - name: Compose logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --tail=100 api file mongo
