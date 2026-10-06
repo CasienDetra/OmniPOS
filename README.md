@@ -51,8 +51,15 @@ each file's language version through the package configuration; without it a
 few long string literals wrap differently and the gate disagrees with your
 commit, which is why CI formats after installing dependencies.
 
-* `ci.yml` — per service: `dart pub get`, `dart format --set-exit-if-changed`,
-  `dart analyze`, `dart test` (integration tests self-skip without a server).
+Both `pubspec.lock` files are committed, and CI, the E2E job and both
+Dockerfiles install with `dart pub get --enforce-lockfile`. That command fails
+instead of silently re-resolving, so no build can use dependency versions
+nobody reviewed. To change them, run `dart pub upgrade` in the package and
+commit the new lock in the same change.
+
+* `ci.yml` — per service: `dart pub get --enforce-lockfile`,
+  `dart format --set-exit-if-changed`, `dart analyze`, `dart test`
+  (integration tests self-skip without a server).
 * `e2e.yml` — builds the real images, boots compose, seeds, then runs
   `test/integration` and `scripts/smoke.dart` against the live stack.
 * `api/Dockerfile` runs `dart test test/unit` before compiling, so a failing

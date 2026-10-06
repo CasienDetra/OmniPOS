@@ -6,7 +6,7 @@
 FROM dart:3.13.4 AS build
 WORKDIR /app
 COPY pubspec.* ./
-RUN dart pub get
+RUN dart pub get --enforce-lockfile
 COPY . .
 
 # Gate the image on the unit suite: failing code never reaches a binary.

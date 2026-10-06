@@ -28,10 +28,12 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-api-${{ hashFiles('api/pubspec.yaml') }}
+          key: ${{ runner.os }}-pub-api-${{ hashFiles('api/pubspec.lock') }}
           restore-keys: ${{ runner.os }}-pub-api-
       - name: Install dependencies
-        run: dart pub get
+        # Fails if pubspec.lock no longer resolves pubspec.yaml, so a run can
+        # never test a dependency set nobody reviewed.
+        run: dart pub get --enforce-lockfile
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed .
       - name: Analyze
@@ -55,10 +57,10 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-file-${{ hashFiles('file/pubspec.yaml') }}
+          key: ${{ runner.os }}-pub-file-${{ hashFiles('file/pubspec.lock') }}
           restore-keys: ${{ runner.os }}-pub-file-
       - name: Install dependencies
-        run: dart pub get
+        run: dart pub get --enforce-lockfile
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed .
       - name: Analyze

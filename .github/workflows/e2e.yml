@@ -64,7 +64,7 @@ jobs:
             -v "$PWD/api:/app" -w /app \
             -e API_BASE_URL=http://127.0.0.1:3000 \
             dart:3.13.4 sh -c "
-              dart pub get > /dev/null &&
+              dart pub get --enforce-lockfile > /dev/null &&
               dart test test/integration &&
               dart run scripts/smoke.dart http://127.0.0.1:3000
             "

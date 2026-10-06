@@ -5,7 +5,7 @@
 FROM dart:3.13.4 AS build
 WORKDIR /app
 COPY pubspec.* ./
-RUN dart pub get
+RUN dart pub get --enforce-lockfile
 COPY . .
 RUN dart pub global activate dart_frog_cli 1.2.14
 RUN dart pub global run dart_frog_cli:dart_frog build
