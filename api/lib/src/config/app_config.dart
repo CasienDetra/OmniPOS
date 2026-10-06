@@ -32,7 +32,7 @@ class AppConfig {
     final mongoUri = directUri.isNotEmpty
         ? directUri
         : 'mongodb://$auth${read('MONGO_HOST', 'localhost')}:'
-            '${read('MONGO_PORT', '27017')}/${read('MONGO_DATABASE', 'pos_api')}';
+              '${read('MONGO_PORT', '27017')}/${read('MONGO_DATABASE', 'pos_api')}';
 
     return AppConfig(
       mongoUri: mongoUri,
