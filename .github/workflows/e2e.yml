@@ -17,16 +17,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  resolve:
+    # Fails loudly when a referenced action cannot be resolved, instead of
+    # letting the jobs below die inside "Set up job".
+    name: Check workflow syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color
+
   stack:
+    name: Live stack
+    needs: resolve
     runs-on: ubuntu-latest
     env:
       # Only used by this throwaway runner; never a production secret.
       JWT_SECRET: ci-ephemeral-secret
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dart@v2
-        with:
-          sdk: '3.13.4'
       - name: Build and start the stack
         run: docker compose up -d --build
       - name: Seed database
@@ -37,7 +47,7 @@ jobs:
         run: |
           for attempt in $(seq 1 30); do
             if curl -fsS http://localhost:3000/api/testing/basic > /dev/null; then
-              echo "API ready"
+              echo "API ready after $attempt probe(s)"
               exit 0
             fi
             sleep 2
@@ -46,12 +56,18 @@ jobs:
           docker compose logs --tail=100 api
           echo "API never became ready"
           exit 1
-      - name: Integration tests (authz against the live server)
-        working-directory: api
-        run: dart test test/integration
-      - name: Smoke script
-        working-directory: api
-        run: dart run scripts/smoke.dart
+      - name: Integration tests and smoke script
+        # Host networking so the container reaches the published ports; the
+        # toolchain is the same image the service builds run in.
+        run: |
+          docker run --rm --net=host \
+            -v "$PWD/api:/app" -w /app \
+            -e API_BASE_URL=http://127.0.0.1:3000 \
+            dart:3.13.4 sh -c "
+              dart pub get > /dev/null &&
+              dart test test/integration &&
+              dart run scripts/smoke.dart http://127.0.0.1:3000
+            "
       - name: Compose logs on failure
         if: failure()
         run: |
