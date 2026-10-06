@@ -6,8 +6,23 @@ services:
     restart: unless-stopped
     volumes:
       - mongo-data:/data/db
+    # Loopback only: the services talk to mongo over the compose network, so
+    # nothing outside this machine needs the port exposed.
     ports:
-      - "27017:27017"
+      - "127.0.0.1:${MONGO_HOST_PORT:-27017}:27017"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "db.adminCommand('ping').ok",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   file:
     build: ./file
@@ -19,7 +34,8 @@ services:
     volumes:
       - file-uploads:/app/public/uploads
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     ports:
       - "8080:8080"
 
@@ -29,11 +45,14 @@ services:
     environment:
       PORT: "3000"
       MONGODB_URI: mongodb://mongo:27017/pos
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      # No default on purpose: a placeholder secret would sign every token.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set it}
       FILE_BASE_URL: http://file:8080
     depends_on:
-      - mongo
-      - file
+      mongo:
+        condition: service_healthy
+      file:
+        condition: service_started
     ports:
       - "3000:3000"
 
