@@ -62,10 +62,52 @@ commit the new lock in the same change.
   (integration tests self-skip without a server).
 * `e2e.yml` — builds the real images, boots compose, seeds, then runs
   `test/integration` and `scripts/smoke.dart` against the live stack.
+* `release.yml` — publishes both images to GHCR on a merge to `main`, and adds
+  version tags plus a GitHub Release when you push a `vX.Y.Z` tag. See
+  [Releases](#releases).
 * `api/Dockerfile` runs `dart test test/unit` before compiling, so a failing
   suite never produces an image.
 * `.dockerignore` in each service keeps `.env` and local build output out of
   the image.
+
+## Releases
+
+One version covers the whole repository: `api/` and `file/` are tagged and
+published together. Before a `vX.Y.Z` tag is allowed to publish, `release.yml`
+checks that the tag matches `version:` in **both** `pubspec.yaml` files and
+that `CHANGELOG.md` has a section for it, so a release cannot ship with stale
+metadata. Pre-release suffixes such as `v1.1.0-rc1` are rejected on purpose;
+the flow only knows final versions.
+
+To cut a release:
+
+1. Set `version:` in `api/pubspec.yaml` and `file/pubspec.yaml`.
+2. Move the `## [Unreleased]` entries in `CHANGELOG.md` under a new
+   `## [x.y.z] - YYYY-MM-DD` heading, and open a fresh `## [Unreleased]`.
+3. Commit, tag, then push both:
+
+   ```bash
+   git tag -a v1.0.1 -m "OmniPOS 1.0.1"
+   git push origin main --follow-tags
+   ```
+
+| Trigger | Image tags published | GitHub Release |
+| ------- | -------------------- | -------------- |
+| merge to `main` | `pos-api:main`, `pos-api:latest`, `pos-api:sha-<short>` (same four for `pos-file`) | no |
+| tag `v1.2.3` | `pos-api:1.2.3` and `pos-api:1.2` on top of the branch tags | yes, notes taken from this changelog |
+
+Deploy a published image without building it:
+
+```bash
+docker pull ghcr.io/casiendetra/pos-api:1.2.3
+docker pull ghcr.io/casiendetra/pos-file:1.2.3
+```
+
+The workflow creates both packages the first time it runs, and a package
+created from a private repository starts out private, so anonymous pulls fail
+until you flip each one once: GitHub → your profile → Packages → *pos-api* →
+Package settings → Change visibility → Public. Later pushes keep that setting.
+Until then, pull with an authenticated `docker login ghcr.io`.
 
 ## Run locally (dev)
 

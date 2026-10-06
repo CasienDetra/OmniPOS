@@ -1,0 +1,121 @@
+name: Release
+
+# Images are published on every merge to the default branch, and a semver tag
+# additionally publishes its version and creates the GitHub Release.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v[0-9]*']
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  # A half-pushed image or release is worse than a queued one.
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release checks
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -eu
+          if ! printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Release tag must look like vX.Y.Z, got $GITHUB_REF_NAME"
+            exit 1
+          fi
+          version="${GITHUB_REF_NAME#v}"
+          for package in api file; do
+            declared=$(sed -n 's/^version: \([0-9.]*\).*/\1/p' "$package/pubspec.yaml" | head -n 1)
+            if [ "$declared" != "$version" ]; then
+              echo "::error::$package/pubspec.yaml declares $declared but the tag says $version"
+              exit 1
+            fi
+          done
+          if ! grep -q "^## \\[$version\\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+
+  images:
+    name: Publish ${{ matrix.package }} image
+    needs: gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [api, file]
+    env:
+      IMAGE: ghcr.io/casiendetra/pos-${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.package }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Attestations need id-token: write; this workflow stays inside the
+          # contents:read + packages:write grant.
+          provenance: false
+          cache-from: type=gha,scope=pos-${{ matrix.package }}
+          cache-to: type=gha,mode=max,scope=pos-${{ matrix.package }}
+
+  github-release:
+    name: Create GitHub Release
+    needs: images
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Take notes from the changelog
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          awk -v version="$version" '
+            index($0, "## [" version "]") == 1 { capture = 1; next }
+            capture && /^## \[/ { exit }
+            capture { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::The $version section of CHANGELOG.md is empty"
+            exit 1
+          fi
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            --target "$GITHUB_SHA" \
+            --title "OmniPOS $version" \
+            --notes-file notes.md
