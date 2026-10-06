@@ -1,0 +1,26 @@
+# Local environment — templates are committed as .env.example
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Dart / pub artifacts (each package also carries a package-level ignore)
+.dart_tool/
+.packages
+.pub-cache/
+build/
+coverage/
+
+# Node tooling used for ad-hoc testing (newman, npm installs)
+node_modules/
