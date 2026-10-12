@@ -45,7 +45,7 @@ jobs:
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/srv/pos' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Tags are needed to resolve the release commit, and the default
           # checkout does not fetch them.
