@@ -18,6 +18,24 @@ Future<void> main(List<String> argv) async {
   await step(
     target,
     'GET',
+    '/healthz',
+    label: 'liveness probe',
+    expectStatus: 200,
+    check: (json) => (json?['data'] as Map?)?['status'] == 'live',
+  );
+
+  await step(
+    target,
+    'GET',
+    '/readyz',
+    label: 'readiness probe (reaches MongoDB)',
+    expectStatus: 200,
+    check: (json) => (json?['data'] as Map?)?['status'] == 'ready',
+  );
+
+  await step(
+    target,
+    'GET',
     '/api/testing/basic',
     label: 'health: public testing endpoint',
     expectStatus: 200,

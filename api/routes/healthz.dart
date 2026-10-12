@@ -1,0 +1,11 @@
+import 'package:dart_frog/dart_frog.dart';
+import 'package:pos_api/pos_api.dart';
+
+/// Liveness only: proves the process serves without touching the database, so
+/// a dependency outage never looks like a crashed service.
+Response onRequest(RequestContext context) {
+  return switch (context.request.method) {
+    HttpMethod.get => jsonSuccess({'status': 'live'}),
+    _ => Response(statusCode: 405),
+  };
+}

@@ -16,11 +16,13 @@ RUN dart pub global activate dart_frog_cli 1.2.14
 RUN dart pub global run dart_frog_cli:dart_frog build
 RUN dart compile exe build/bin/server.dart -o /app/server
 RUN dart compile exe scripts/seed.dart -o /app/seed
+RUN dart compile exe scripts/probe.dart -o /app/probe
 
 FROM scratch
 WORKDIR /app
 COPY --from=build /runtime/ /
 COPY --from=build /app/server /app/server
 COPY --from=build /app/seed /app/seed
+COPY --from=build /app/probe /app/probe
 EXPOSE 3000
 CMD ["/app/server"]

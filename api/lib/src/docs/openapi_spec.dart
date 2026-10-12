@@ -99,6 +99,58 @@ const openApiSpecJson = r'''
         }
       }
     },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "security": [],
+        "summary": "Liveness probe (no dependencies checked)",
+        "responses": {
+          "200": {
+            "description": "Process is serving",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "security": [],
+        "summary": "Readiness probe (fails while MongoDB is unreachable)",
+        "responses": {
+          "200": {
+            "description": "Service can handle requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/account/auth/login": {
       "post": {
         "tags": [

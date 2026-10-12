@@ -5,9 +5,10 @@ import 'package:dart_frog/dart_frog.dart';
 import 'package:mongo_dart/mongo_dart.dart' show MongoDartError;
 import 'package:pos_api/pos_api.dart';
 
-/// v4's public route list: health, login and the testing endpoints are the
-/// only paths that work without a bearer token.
-const _publicPaths = {'/', '/openapi', '/swagger'};
+/// v4's public route list: the probes, health, login and the testing endpoints
+/// are the only paths that work without a bearer token. Readiness must stay
+/// unauthenticated or an orchestrator can never observe it.
+const _publicPaths = {'/', '/healthz', '/readyz', '/openapi', '/swagger'};
 const _publicPrefixes = ['/api/account/auth/login', '/api/testing'];
 
 /// Global error boundary (v4 ExceptionErrorsFilter) wrapping the auth guard,

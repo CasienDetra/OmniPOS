@@ -46,15 +46,16 @@ jobs:
       - name: Wait for API readiness
         run: |
           for attempt in $(seq 1 30); do
-            if curl -fsS http://localhost:3000/api/testing/basic > /dev/null; then
-              echo "API ready after $attempt probe(s)"
+            if curl -fsS http://localhost:3000/readyz > /dev/null &&
+               curl -fsS http://localhost:8080/readyz > /dev/null; then
+              echo "both services ready after $attempt probe(s)"
               exit 0
             fi
             sleep 2
           done
           docker compose ps
-          docker compose logs --tail=100 api
-          echo "API never became ready"
+          docker compose logs --tail=100 api file
+          echo "the stack never became ready"
           exit 1
       - name: Integration tests and smoke script
         # Host networking so the container reaches the published ports; the

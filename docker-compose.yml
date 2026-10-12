@@ -36,8 +36,20 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+    # The images ship /app/probe because neither final image carries curl: the
+    # api stage is `FROM scratch` and the file stage installs nothing extra.
+    healthcheck:
+      test: ["CMD", "/app/probe", "http://127.0.0.1:8080/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Bind address is configurable rather than hard-coded: development wants
+    # every interface, a host behind a TLS proxy wants 127.0.0.1, and a POS on
+    # a LAN wants one specific address. docker-compose.deploy.yml documents the
+    # production values.
     ports:
-      - "8080:8080"
+      - "${FILE_BIND_ADDRESS:-0.0.0.0}:8080:8080"
 
   api:
     build: ./api
@@ -52,9 +64,15 @@ services:
       mongo:
         condition: service_healthy
       file:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/probe", "http://127.0.0.1:3000/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     ports:
-      - "3000:3000"
+      - "${API_BIND_ADDRESS:-0.0.0.0}:3000:3000"
 
 volumes:
   mongo-data:

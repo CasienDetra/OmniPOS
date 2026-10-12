@@ -11,11 +11,13 @@ RUN dart pub global activate dart_frog_cli 1.2.14
 RUN dart pub global run dart_frog_cli:dart_frog build
 RUN dart compile exe build/bin/server.dart -o /app/server
 RUN dart compile exe scripts/seed.dart -o /app/seed
+RUN dart compile exe scripts/probe.dart -o /app/probe
 
 FROM debian:trixie-slim
 WORKDIR /app
 COPY --from=build /app/server /app/server
 COPY --from=build /app/seed /app/seed
+COPY --from=build /app/probe /app/probe
 # dart_frog build copies static assets (public/) next to the binary.
 COPY --from=build /app/build/public /app/public
 ENV UPLOAD_DIR=public/uploads
