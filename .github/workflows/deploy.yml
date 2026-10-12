@@ -1,0 +1,128 @@
+name: Deploy
+
+# Deploys one released tag to the compose stack on the production host. Called
+# by release.yml right after the images are published, and runnable by hand for
+# a rollback:
+#
+#   gh workflow run deploy.yml -f version=v1.0.1
+#
+# Needs repository variables DEPLOY_HOST, DEPLOY_USER (as secrets, they are not
+# public identifiers you want echoed in logs) plus DEPLOY_SSH_KEY and
+# DEPLOY_KNOWN_HOSTS, and DEPLOY_ENABLED=true to be reachable at all. See the
+# Deployments section of README for the one-time host setup.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release tag to deploy
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag to deploy, for example v1.0.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  # Never cancel a deploy: the host would be left mid-restart.
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/srv/pos' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tags are needed to resolve the release commit, and the default
+          # checkout does not fetch them.
+          fetch-depth: 0
+
+      - name: Resolve the pinned image tag
+        id: image
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::refusing to deploy '$VERSION': expected a vMAJOR.MINOR.PATCH tag"
+            exit 1
+          fi
+          git fetch --tags --quiet
+          if ! git rev-parse -q --verify "refs/tags/$VERSION" > /dev/null; then
+            echo "::error::tag $VERSION does not exist in this repository"
+            exit 1
+          fi
+          sha=$(git rev-list -n 1 "$VERSION")
+          if ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::could not resolve $VERSION to a commit"
+            exit 1
+          fi
+          # release.yml publishes the short-sha tag, so production always runs
+          # the immutable build for this exact commit rather than a mutable
+          # version tag someone could re-point.
+          echo "tag=sha-$(printf '%s' "$sha" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Check the host configuration
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is not set - see the Deployments section of README"
+              missing=1
+            fi
+          done
+          case "$DEPLOY_DIR" in
+            /*) ;;
+            *) echo "::error::DEPLOY_DIR must be an absolute path"; exit 1 ;;
+          esac
+          exit "$missing"
+
+      - name: Write SSH credentials
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Host keys are pinned rather than accepted on first use, so a
+          # man-in-the-middle on the way to the production host fails loudly.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Copy the deploy bundle
+        run: |
+          set -euo pipefail
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh -i ~/.ssh/deploy_key "$target" "mkdir -p '$DEPLOY_DIR'"
+          scp -i ~/.ssh/deploy_key docker-compose.yml "$target:$DEPLOY_DIR/"
+          scp -i ~/.ssh/deploy_key docker-compose.deploy.yml "$target:$DEPLOY_DIR/"
+          scp -i ~/.ssh/deploy_key scripts/deploy.sh "$target:$DEPLOY_DIR/deploy.sh"
+
+      - name: Deploy and wait for readiness
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh -i ~/.ssh/deploy_key "$target" \
+            "cd '$DEPLOY_DIR' && IMAGE_TAG='$IMAGE_TAG' bash deploy.sh"
+
+      - name: Report what is running
+        run: |
+          set -euo pipefail
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh -i ~/.ssh/deploy_key "$target" \
+            "cd '$DEPLOY_DIR' && docker compose -f docker-compose.yml -f docker-compose.deploy.yml ps"

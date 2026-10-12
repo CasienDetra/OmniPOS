@@ -119,3 +119,20 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "OmniPOS $version" \
             --notes-file notes.md
+
+  deploy:
+    name: Deploy
+    # After the images exist, so production can never start a tag that was
+    # never published.
+    needs: images
+    # Skipped until the host is configured; see the Deployments section of
+    # README. Set DEPLOY_ENABLED once DEPLOY_HOST and friends are in place.
+    if: startsWith(github.ref, 'refs/tags/') && vars.DEPLOY_ENABLED == 'true'
+    # The called workflow checks out the repository, and a reusable workflow
+    # only ever gets the intersection of these permissions and its own.
+    permissions:
+      contents: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      version: ${{ github.ref_name }}
+    secrets: inherit

@@ -1,0 +1,44 @@
+# Production overrides for the compose stack, layered on docker-compose.yml:
+#
+#   IMAGE_TAG=sha-0123456 docker compose -f docker-compose.yml \
+#     -f docker-compose.deploy.yml up -d --no-build
+#
+# The base file stays the development definition, so a clone can still be built
+# and started without registry access. This file pins what runs to an image CI
+# published, and hardens logging and shutdown for a host someone else can reach.
+#
+# Bind addresses are not set here: they belong in the host's .env, because the
+# right value depends on what can reach this machine.
+#   API_BIND_ADDRESS=127.0.0.1     when a TLS proxy on the host terminates
+#   API_BIND_ADDRESS=192.168.1.20  when terminals on a LAN connect directly
+services:
+  api:
+    # IMAGE_TAG is set by scripts/deploy.sh to the sha-<commit> tag that
+    # release.yml published, so a rollback is a different value, not a rebuild.
+    image: ghcr.io/casiendetra/pos-api:${IMAGE_TAG:?IMAGE_TAG is set by the deploy script}
+    # An in-flight order should finish before the process is killed.
+    stop_grace_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  file:
+    image: ghcr.io/casiendetra/pos-file:${IMAGE_TAG:?IMAGE_TAG is set by the deploy script}
+    stop_grace_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  mongo:
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
