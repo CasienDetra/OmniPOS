@@ -34,8 +34,9 @@ disagrees with either service's `pubspec.yaml` or with an entry here.
 
 - `api` waits for the file service to report healthy rather than merely
   started.
-- `main` is a protected branch: changes arrive through a pull request with the
-  `CI` and `E2E` workflows green, and cannot be force-pushed over.
+- `main` is a protected branch: changes arrive through a pull request whose
+  `API`, `File service`, `Check workflow syntax` and `Live stack` checks are
+  green, and cannot be force-pushed over.
 
 ## [1.0.0] - 2026-10-06
 

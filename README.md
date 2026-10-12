@@ -89,8 +89,12 @@ are not Conventional Commits:
 git config core.hooksPath .githooks
 ```
 
-`main` is protected: a change reaches it through a pull request with `CI` and
-`E2E` green, and cannot be force-pushed over.
+`main` is protected. A change reaches it through a pull request with the four
+job checks green — `API`, `File service`, `Check workflow syntax`, `Live
+stack` — and cannot be force-pushed over or merged while they are failing.
+Approvals are not required, because this is a one-person repository, and the
+owner can still override the checks in an emergency; treat an override as an
+incident worth following up, not a shortcut.
 
 ## Releases
 
