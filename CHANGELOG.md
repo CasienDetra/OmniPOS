@@ -10,6 +10,33 @@ disagrees with either service's `pubspec.yaml` or with an entry here.
 
 ## [Unreleased]
 
+### Added
+
+- Liveness and readiness probes on both services: `GET /healthz` answers while
+  the process serves, `GET /readyz` checks MongoDB — and for the file service,
+  that the upload directory actually accepts a write — and answers 503
+  otherwise. Both are unauthenticated and documented in the OpenAPI file.
+- `/app/probe`, a second compiled binary in every image, so the compose
+  healthcheck can run the readiness probe on a host with neither a shell nor
+  curl; the API image is `FROM scratch`.
+- `deploy.yml`, `docker-compose.deploy.yml` and `scripts/deploy.sh`: pushing a
+  release tag now restarts the production stack on that commit's pinned image,
+  waits for readiness, and rolls back to the previously recorded tag when the
+  new one never becomes ready.
+- `API_BIND_ADDRESS` and `FILE_BIND_ADDRESS`, so a deployment can publish on
+  loopback or on a single LAN address instead of every interface.
+- `.github/dependabot.yml` covering both packages, the pinned base images and
+  the GitHub Actions.
+- `.githooks/pre-commit` and `.githooks/commit-msg`, opt-in with
+  `git config core.hooksPath .githooks`.
+
+### Changed
+
+- `api` waits for the file service to report healthy rather than merely
+  started.
+- `main` is a protected branch: changes arrive through a pull request with the
+  `CI` and `E2E` workflows green, and cannot be force-pushed over.
+
 ## [1.0.0] - 2026-10-06
 
 First release of the Dart Frog + MongoDB POS backend.

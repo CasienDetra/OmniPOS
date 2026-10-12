@@ -36,7 +36,11 @@ docker compose exec file /app/seed   # files collection index
 * `JWT_SECRET` has no default — compose refuses to start the API without it,
   so a placeholder secret can never sign real tokens.
 * MongoDB is published on `127.0.0.1` only; the services reach it on the
-  compose network. `api` and `file` wait on the mongo healthcheck before start.
+  compose network. `api` and `file` wait on the mongo healthcheck before start,
+  and `api` additionally waits for the file service to report healthy.
+* `docker compose ps` shows `(healthy)` once `GET /readyz` answers in both
+  services; `GET /healthz` stays 200 while a dependency is down, so an outage
+  never looks like a crash. See [Deployments](#deployments).
 
 ## Toolchain and CI
 
@@ -60,15 +64,33 @@ commit the new lock in the same change.
 * `ci.yml` — per service: `dart pub get --enforce-lockfile`,
   `dart format --set-exit-if-changed`, `dart analyze`, `dart test`
   (integration tests self-skip without a server).
-* `e2e.yml` — builds the real images, boots compose, seeds, then runs
-  `test/integration` and `scripts/smoke.dart` against the live stack.
+* `e2e.yml` — builds the real images, boots compose, seeds, waits on `/readyz`
+  of both services, then runs `test/integration` and `scripts/smoke.dart`
+  against the live stack.
 * `release.yml` — publishes both images to GHCR on a merge to `main`, and adds
   version tags plus a GitHub Release when you push a `vX.Y.Z` tag. See
   [Releases](#releases).
+* `deploy.yml` — restarts the production stack on one pinned image tag, with
+  automatic rollback. Called by `release.yml` and runnable by hand. See
+  [Deployments](#deployments).
+* `dependabot.yml` — weekly grouped minor and patch bumps for both packages,
+  the base images and the actions. Major bumps always arrive as single PRs to
+  be read on their own.
 * `api/Dockerfile` runs `dart test test/unit` before compiling, so a failing
   suite never produces an image.
 * `.dockerignore` in each service keeps `.env` and local build output out of
   the image.
+
+Turn on the local hooks once per clone; they run the same formatter check CI
+runs, in the pinned image when Docker is available, and reject subjects that
+are not Conventional Commits:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`main` is protected: a change reaches it through a pull request with `CI` and
+`E2E` green, and cannot be force-pushed over.
 
 ## Releases
 
@@ -108,6 +130,89 @@ created from a private repository starts out private, so anonymous pulls fail
 until you flip each one once: GitHub → your profile → Packages → *pos-api* →
 Package settings → Change visibility → Public. Later pushes keep that setting.
 Until then, pull with an authenticated `docker login ghcr.io`.
+
+## Deployments
+
+Production runs the same compose stack, from published images rather than a
+local build. `docker-compose.yml` remains the development definition and
+`docker-compose.deploy.yml` layers on top of it: it pins both services to
+`ghcr.io/casiendetra/pos-*:${IMAGE_TAG}`, caps and rotates container logs, and
+gives each service 30 seconds to finish the request it is serving. Nothing is
+rebuilt on the host, so what runs is byte for byte what CI published.
+
+### One-time host setup
+
+1. Docker Engine with the compose plugin, and a directory the deploy user owns:
+   `sudo mkdir -p /srv/pos && sudo chown <deploy-user> /srv/pos`.
+2. A way for that user to pull the images. If both GHCR packages are public
+   (see Releases above) an anonymous pull works and there is nothing to do.
+   While they are private, sign the user in once with a fine-grained token that
+   has `read:packages` on this repository:
+   `docker login ghcr.io -U <github-handle> --password-stdin`.
+3. Secrets on the host, out of git: `/srv/pos/.env` with a real `JWT_SECRET`
+   (`openssl rand -base64 48`) plus the bind address that host actually needs —
+   `API_BIND_ADDRESS=127.0.0.1` and `FILE_BIND_ADDRESS=127.0.0.1` when a TLS
+   proxy terminates on the same machine, or that machine's LAN address when the
+   terminals connect directly. The services need no other configuration.
+4. The repository settings `deploy.yml` reads:
+
+   ```bash
+   gh variable set DEPLOY_ENABLED --body true
+   gh variable set DEPLOY_DIR --body /srv/pos
+   gh secret set DEPLOY_HOST < host.txt
+   gh secret set DEPLOY_USER < user.txt
+   gh secret set DEPLOY_SSH_KEY < ./deploy_key        # private half
+   gh secret set DEPLOY_KNOWN_HOSTS < known_hosts.txt # public half's host key
+   ```
+
+   Generate the key pair on your machine with `ssh-keygen -t ed25519 -f
+   deploy_key -C pos-deploy`, put the public half in the deploy user's
+   `authorized_keys`, and never use a key with a passphrase — the workflow has
+   no terminal to type it into. `DEPLOY_KNOWN_HOSTS` is trusted verbatim and
+   the workflow never accepts a host key on first use, so build it from the
+   host's own console and check the fingerprint there rather than piping
+   `ssh-keyscan` blindly.
+
+### Deploy
+
+Pushing a `vX.Y.Z` tag publishes the images, then — only once `DEPLOY_ENABLED`
+is `true` — the `Deploy` job of `release.yml` calls `deploy.yml`, which resolves
+the tag to its `sha-<commit>` tag, copies the two compose files and
+`scripts/deploy.sh` into `DEPLOY_DIR`, and runs the script there. The script
+pulls, restarts with `up -d --no-build`, and polls `/readyz` inside both
+containers until they answer. If the new release never becomes ready, the tag
+recorded in `.release.env` is started again and the job fails loudly.
+
+### Rollback and recovery
+
+Rollback is a redeploy of the tag that was running before. Nothing is rebuilt:
+
+```bash
+gh workflow run deploy.yml -f version=v1.0.1                  # from CI
+cd /srv/pos && IMAGE_TAG=sha-<previous> bash deploy.sh        # or on the host
+cat /srv/pos/.release.env                                     # what runs now
+```
+
+`IMAGE_TAG=1.0.1` works too, but a version tag can be re-pointed while a
+`sha-<commit>` tag cannot, so pin the commit when you want certainty.
+
+Verify a running deployment with the two probes: `GET /healthz` answers while
+the process serves, and `GET /readyz` is what a till actually cares about — it
+pings MongoDB, and for the file service proves the upload directory accepts a
+write, answering 503 otherwise. Both are unauthenticated, and both are what the
+compose healthcheck runs every 10 seconds using `/app/probe`, the binary baked
+into each image. That is why `docker compose ps` reports `(healthy)` or
+`(unhealthy)` on a host with no curl installed.
+
+Not automated yet: the `mongo-data` and `file-uploads` volumes have no backup
+job. Until there is one, take both off the host before deploying anything you
+cannot afford to lose, and check the archive restores:
+
+```bash
+docker compose exec -T mongo mongodump --archive > "pos-$(date +%F).dump"
+docker run --rm -v pos_file-uploads:/data -v "$PWD":/out alpine \
+  tar czf /out/uploads-$(date +%F).tgz -C /data .
+```
 
 ## Run locally (dev)
 

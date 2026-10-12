@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Enforce Conventional Commits: the history reads like a changelog, and the
+# release notes are cut from CHANGELOG.md, so a stray "updated stuff" is the
+# kind of thing worth catching locally rather than in review.
+set -euo pipefail
+
+subject=$(head -n 1 "$1")
+
+# Git generates these itself and rewriting them would be unhelpful.
+case "$subject" in
+  'Merge '* | 'Revert '* | 'fixup! '* | 'squash! '*) exit 0 ;;
+esac
+
+types='build|chore|ci|docs|perf|refactor|revert|style|test|feat|fix'
+pattern="^($types)(\([a-z0-9./_-]+\))?!?: [^ ].{0,71}$"
+
+if ! printf '%s' "$subject" | grep -Eq "$pattern"; then
+  cat >&2 <<MSG
+commit-msg: subject is not a Conventional Commit.
+
+  expected:  type(scope): imperative summary
+  types:     ${types//|/, }
+  examples:  fix(api): reject negative quantities in an order
+             ci: publish images to GHCR on tag push
+
+  got:       $subject
+MSG
+  exit 1
+fi

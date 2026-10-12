@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Pre-commit gate: runs the formatter check CI runs, so a commit that CI would
+# reject never leaves the machine.
+#
+# The pinned Dart image is preferred because the toolchain decides what
+# "formatted" means — a host Dart of a different version disagrees with CI on
+# a few long string literals. Falls back to the host `dart` when Docker or the
+# image is unavailable, and says so, because that result is not authoritative.
+set -euo pipefail
+
+DART_IMAGE=dart:3.13.4
+cd "$(git rev-parse --show-toplevel)"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR -- '*.dart')
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+packages=$(printf '%s\n' "$staged" | cut -d/ -f1 | sort -u | grep -E '^(api|file)$' || true)
+if [ -z "$packages" ]; then
+  exit 0
+fi
+
+use_docker=1
+if ! docker image inspect "$DART_IMAGE" >/dev/null 2>&1; then
+  use_docker=0
+  echo "pre-commit: $DART_IMAGE not available locally, checking with host dart" >&2
+  echo "pre-commit: (run 'docker pull $DART_IMAGE' for an authoritative result)" >&2
+fi
+
+status=0
+for pkg in $packages; do
+  # Deliberately the same command CI runs, over the whole package rather than
+  # only the staged files: the formatter resolves each file's language version
+  # through the package configuration, so dependencies are installed first and
+  # the package is formatted in one pass.
+  if [ "$use_docker" = 1 ]; then
+    cache_root="$HOME/.cache/pos-dart-hooks"
+    mkdir -p "$cache_root/home" "$cache_root/pub-cache"
+    docker run --rm --user "$(id -u):$(id -g)" \
+      -e HOME=/tmp/dart_home \
+      -v "$cache_root/home":/tmp/dart_home \
+      -v "$cache_root/pub-cache":/tmp/dart_home/.pub-cache \
+      -v "$PWD":/repo -w "/repo/$pkg" \
+      "$DART_IMAGE" sh -c "
+        dart pub get --enforce-lockfile > /dev/null
+        dart format --output=none --set-exit-if-changed .
+      " || status=1
+  else
+    (
+      cd "$pkg"
+      dart pub get > /dev/null
+      dart format --output=none --set-exit-if-changed .
+    ) || status=1
+  fi
+done
+
+if [ "$status" != 0 ]; then
+  cat >&2 <<'MSG'
+pre-commit: formatting does not match the pinned toolchain.
+Fix it with:  dart format .   (in the affected package, inside dart:3.13.4)
+MSG
+fi
+
+exit "$status"

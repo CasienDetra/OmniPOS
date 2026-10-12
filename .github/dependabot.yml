@@ -1,0 +1,76 @@
+version: 2
+updates:
+  # Both packages commit pubspec.lock, so Dependabot opens a PR that updates
+  # the manifest and the lock together. That is exactly the pair
+  # `dart pub get --enforce-lockfile` requires, so its PRs build.
+  - package-ecosystem: pub
+    directory: /api
+    schedule:
+      interval: weekly
+      time: '03:00'
+      timezone: Asia/Phnom_Penh
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - api
+    groups:
+      api-minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: pub
+    directory: /file
+    schedule:
+      interval: weekly
+      time: '03:00'
+      timezone: Asia/Phnom_Penh
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - file
+    groups:
+      file-minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+
+  # Base images: dart:3.13.4 and debian:trixie-slim. Bumping the Dart image
+  # changes formatting and compilation, so review these next to the toolchain
+  # note in README and re-run `dart format` across both packages.
+  - package-ecosystem: docker
+    directory: /api
+    schedule:
+      interval: weekly
+      time: '03:00'
+      timezone: Asia/Phnom_Penh
+    labels:
+      - dependencies
+      - docker
+      - api
+
+  - package-ecosystem: docker
+    directory: /file
+    schedule:
+      interval: weekly
+      time: '03:00'
+      timezone: Asia/Phnom_Penh
+    labels:
+      - dependencies
+      - docker
+      - file
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      time: '03:00'
+      timezone: Asia/Phnom_Penh
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
