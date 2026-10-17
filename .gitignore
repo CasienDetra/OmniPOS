@@ -4,6 +4,10 @@
 .env.*.local
 !.env.example
 
+# Backup artifacts land on host disk under the default BACKUP_DIR; they are
+# data, never source.
+/backups/
+
 # OS
 .DS_Store
 Thumbs.db

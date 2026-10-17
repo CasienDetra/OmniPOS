@@ -20,6 +20,18 @@ COPY --from=build /app/seed /app/seed
 COPY --from=build /app/probe /app/probe
 # dart_frog build copies static assets (public/) next to the binary.
 COPY --from=build /app/build/public /app/public
+# The server writes uploads under this path, so the directory must belong to
+# the user the container runs as. When Docker first mounts an empty named
+# volume it copies this directory - mode and ownership included - out of the
+# image, which is what keeps a plain `docker compose up` working for new
+# checkouts. A volume created by the older root-owned image needs the one-time
+# chown described in the README instead.
+RUN mkdir -p /app/public/uploads \
+  && chown 65534:65534 /app/public/uploads \
+  && chmod 755 /app/public/uploads
+# 65534:nobody - same numeric id as api/Dockerfile, referenced here because
+# Debian's /etc/passwd does map it to a name.
+USER 65534:65534
 ENV UPLOAD_DIR=public/uploads
 EXPOSE 8080
 CMD ["/app/server"]

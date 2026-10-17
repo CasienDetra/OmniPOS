@@ -26,6 +26,7 @@ If MongoDB is unreachable the global error boundary returns
 ```bash
 cd POS
 cp .env.example .env      # then set JWT_SECRET: openssl rand -base64 48
+                          # and replace the two MongoDB passwords (see .env.example)
 docker compose up --build -d
 docker compose exec api /app/seed    # indexes + demo data
 docker compose exec file /app/seed   # files collection index
@@ -34,7 +35,27 @@ docker compose exec file /app/seed   # files collection index
 * API: http://localhost:3000 · File service: http://localhost:8080 (playground page at `/`)
 * Seeded accounts: `admin@pos.local / admin123` (Admin) and `cashier@pos.local / cashier123` (Cashier).
 * `JWT_SECRET` has no default — compose refuses to start the API without it,
-  so a placeholder secret can never sign real tokens.
+  so a placeholder secret can never sign real tokens. The four MongoDB
+  credentials are required for the same reason: a stack that interpolates
+  without them cannot be running credential-free.
+* MongoDB runs with `--auth`. On a brand-new `mongo-data` volume the root
+  user comes from the `MONGO_ROOT_*` variables and `docker/mongo-init.sh`
+  creates the least-privilege `MONGO_APP_*` user; `api`, `file` and the
+  backup service all connect as that app user, never root. An
+  already-populated volume never runs the init: see the runbook under
+  [Deployments](#deployments).
+* A `backup` service dumps the database and archives the uploads volume
+  into `BACKUP_DIR` (default `./backups`) every `BACKUP_INTERVAL_SECONDS`
+  and prunes beyond `BACKUP_KEEP` copies. See
+  [Backups and restore](#backups-and-restore).
+* Both services run as uid 65534 (`nobody`), so a checkout upgrading from
+  the old root-owned images must hand the existing uploads volume over
+  once, and only once (`docker compose down` first):
+
+  ```bash
+  docker run --rm -v pos_file-uploads:/d alpine chown -R 65534:65534 /d
+  ```
+
 * MongoDB is published on `127.0.0.1` only; the services reach it on the
   compose network. `api` and `file` wait on the mongo healthcheck before start,
   and `api` additionally waits for the file service to report healthy.
@@ -71,7 +92,10 @@ commit the new lock in the same change.
   version tags plus a GitHub Release when you push a `vX.Y.Z` tag. See
   [Releases](#releases).
 * `deploy.yml` — restarts the production stack on one pinned image tag, with
-  automatic rollback. Called by `release.yml` and runnable by hand. See
+  automatic rollback. Called by `release.yml` and runnable by hand. The bundle
+  it copies to the host is everything the compose files bind-mount: the two
+  compose files, `scripts/deploy.sh`, `scripts/backup.sh`,
+  `scripts/restore.sh` and `docker/mongo-init.sh`. See
   [Deployments](#deployments).
 * `dependabot.yml` — weekly grouped minor and patch bumps for both packages,
   the base images and the actions. Major bumps always arrive as single PRs to
@@ -140,9 +164,15 @@ Until then, pull with an authenticated `docker login ghcr.io`.
 Production runs the same compose stack, from published images rather than a
 local build. `docker-compose.yml` remains the development definition and
 `docker-compose.deploy.yml` layers on top of it: it pins both services to
-`ghcr.io/casiendetra/pos-*:${IMAGE_TAG}`, caps and rotates container logs, and
-gives each service 30 seconds to finish the request it is serving. Nothing is
-rebuilt on the host, so what runs is byte for byte what CI published.
+`ghcr.io/casiendetra/pos-*:${IMAGE_TAG}`, caps and rotates container logs,
+gives each service 30 seconds to finish the request it is serving, hardens
+every container (dropped capabilities, no privilege escalation, read-only
+root filesystems — the base file stays comfortable for development) and
+puts a memory, CPU and process-id ceiling on each service so one runaway
+query cannot take the host down; the header comment in that file records
+how the numbers were sized and what to revisit on a different machine.
+Nothing is rebuilt on the host, so what runs is byte for byte what CI
+published.
 
 ### One-time host setup
 
@@ -154,7 +184,9 @@ rebuilt on the host, so what runs is byte for byte what CI published.
    has `read:packages` on this repository:
    `docker login ghcr.io -U <github-handle> --password-stdin`.
 3. Secrets on the host, out of git: `/srv/pos/.env` with a real `JWT_SECRET`
-   (`openssl rand -base64 48`) plus the bind address that host actually needs —
+   (`openssl rand -base64 48`), the four MongoDB credentials from
+   `.env.example` (keep the passwords to letters and digits — see the
+   comment in that file), plus the bind address that host actually needs —
    `API_BIND_ADDRESS=127.0.0.1` and `FILE_BIND_ADDRESS=127.0.0.1` when a TLS
    proxy terminates on the same machine, or that machine's LAN address when the
    terminals connect directly. The services need no other configuration.
@@ -181,11 +213,13 @@ rebuilt on the host, so what runs is byte for byte what CI published.
 
 Pushing a `vX.Y.Z` tag publishes the images, then — only once `DEPLOY_ENABLED`
 is `true` — the `Deploy` job of `release.yml` calls `deploy.yml`, which resolves
-the tag to its `sha-<commit>` tag, copies the two compose files and
-`scripts/deploy.sh` into `DEPLOY_DIR`, and runs the script there. The script
-pulls, restarts with `up -d --no-build`, and polls `/readyz` inside both
-containers until they answer. If the new release never becomes ready, the tag
-recorded in `.release.env` is started again and the job fails loudly.
+the tag to its `sha-<commit>` tag, copies the deploy bundle — the two compose
+files, `scripts/deploy.sh`, `scripts/backup.sh`, `scripts/restore.sh` and
+`docker/mongo-init.sh` — into `DEPLOY_DIR`, and runs the script there. The script
+fixes up the uploads volume ownership once, pulls, restarts with
+`up -d --no-build`, and polls `/readyz` inside both containers until they
+answer. If the new release never becomes ready, the tag recorded in
+`.release.env` is started again and the job fails loudly.
 
 ### Rollback and recovery
 
@@ -208,15 +242,135 @@ compose healthcheck runs every 10 seconds using `/app/probe`, the binary baked
 into each image. That is why `docker compose ps` reports `(healthy)` or
 `(unhealthy)` on a host with no curl installed.
 
-Not automated yet: the `mongo-data` and `file-uploads` volumes have no backup
-job. Until there is one, take both off the host before deploying anything you
-cannot afford to lose, and check the archive restores:
+Backups are automated: see [Backups and restore](#backups-and-restore) below.
+
+### Enabling auth on an existing host
+
+MongoDB authentication is defined in `docker-compose.yml`, but enabling
+`--auth` never creates users retroactively — `MONGO_INITDB_ROOT_*` and
+`docker/mongo-init.sh` only run while `/data/db` is empty. A host that
+already has a populated `mongo-data` volume therefore needs its users
+created by hand **before** the first authenticated deploy, or the stack
+comes up with an unreachable database:
+
+1. Put the four `MONGO_*` credentials in `/srv/pos/.env` (same names as
+   `.env.example`; passwords letters and digits only).
+2. While the stack is still running the **old** definition (no auth), exec
+   into mongo and create both users. The guards make this idempotent:
+
+   ```bash
+   docker compose exec -T mongo mongosh --quiet <<EOF
+   use admin
+   if (!db.getUser("<MONGO_ROOT_USERNAME from .env>"))
+     db.createUser({ user: "<MONGO_ROOT_USERNAME>",
+                     pwd:  "<MONGO_ROOT_PASSWORD>",
+                     roles: [{ role: "root", db: "admin" }] })
+   use pos
+   if (!db.getUser("<MONGO_APP_USER from .env>"))
+     db.createUser({ user: "<MONGO_APP_USER>",
+                     pwd:  "<MONGO_APP_PASSWORD>",
+                     roles: [{ role: "readWrite", db: "pos" }] })
+   EOF
+   ```
+
+3. Deploy the new compose files (normal `deploy.yml` run, or
+   `IMAGE_TAG=<current> bash deploy.sh` on the host). `mongo` reappears
+   with `--auth`, the healthcheck authenticates as root, and api/file/backup
+   connect as the app user.
+4. Confirm the gate holds:
+
+   ```bash
+   docker compose exec -T mongo mongosh --quiet "mongodb://127.0.0.1:27017/pos" \
+     --eval "db.users.countDocuments()"     # must fail: requires authentication
+   ```
+
+Recovery path if step 2 was skipped: the deploy comes up with `mongo`
+unhealthy (the healthcheck authenticates, and there is no user to
+authenticate as). MongoDB's localhost exception is still open — the very
+first user on an auth-enabled instance with no users can be created from
+inside the container — so run step 2 again with `mongosh --quiet
+mongodb://127.0.0.1:27017/admin` (connecting via localhost, no
+credentials) and restart the services.
+
+The same runbook applies to a development machine that kept an old
+`mongo-data` volume. Deleting the volume and re-seeding is the
+alternative when the data does not matter:
 
 ```bash
-docker compose exec -T mongo mongodump --archive > "pos-$(date +%F).dump"
-docker run --rm -v pos_file-uploads:/data -v "$PWD":/out alpine \
-  tar czf /out/uploads-$(date +%F).tgz -C /data .
+docker compose down && docker volume rm pos_mongo-data && docker compose up -d --build
+docker compose exec api /app/seed && docker compose exec file /app/seed
 ```
+
+### Backups and restore
+
+The `backup` service in `docker-compose.yml` is the answer to the stack's
+highest-risk gap: until now `mongo-data` and `file-uploads` had no backup at
+all. Why a compose service rather than a host cron: the deploy to a host is
+just the bundle `deploy.yml` copies, so a cron line installed by hand would
+be setup magic that no pipeline owns and that a rebuilt machine silently
+loses. The service travels in the bundle (`scripts/backup.sh`), starts with
+the stack, and its container is the plain `mongo:7` image — the same server
+version, so `mongodump` can never be older than the database it reads.
+
+Each round (immediately at start, then every `BACKUP_INTERVAL_SECONDS`,
+default 6 h) writes to `BACKUP_DIR` on the host disk — deliberately outside
+every docker volume, because the disaster being guarded against is losing
+the volumes themselves:
+
+* `pos-<UTC stamp>.dump.gz` — `mongodump --archive --gzip` of the `pos`
+  database, taken as the app user (its `readWrite` is all `mongodump` needs
+  on one database, so no root password lives in this container).
+* `uploads-<UTC stamp>.tgz` — the whole `file-uploads` volume, read through
+  a read-only mount.
+* `.last-success` — epoch of the last clean round; the service's healthcheck
+  goes red when that file ages past four intervals, so a loop that quietly
+  stopped cannot hide behind a running process.
+
+Both land as `*.part` and are renamed only after success: a round that fails
+publishes nothing, leaves `.last-success` where it was and prunes nothing, so
+retention can never thin the good archives on the strength of a bad round.
+The newest `BACKUP_KEEP` of each kind survive (default 14 — about three and a
+half days at six-hourly). Off-site copies are not in scope: a host fire is
+still an untested single copy; mirror `BACKUP_DIR` somewhere else if the shop
+cannot carry that risk.
+
+The drill is what makes any of this real — an untested backup is not a
+backup. `scripts/restore.sh drill` starts a throwaway `mongo:7` container,
+restores the newest dump (or one you name) into it, and prints
+per-collection document counts. It touches nothing running:
+
+```bash
+cd /srv/pos && bash scripts/restore.sh drill
+bash scripts/restore.sh drill backups/pos-2026-10-17T060000Z.dump.gz
+```
+
+A successful drill still needs human eyes: *do the counts look like this
+shop?* Restoring an empty-but-valid database is a failed backup, and only a
+person knows the difference. Recommended rhythm: drill after any change to
+the backup service, and at least once a quarter.
+
+A real recovery — replacing live data — is the same script's second mode,
+and it is destructive by design (it asks for the word `yes`; `--yes` skips
+that for runbook rehearsing on a scratch host):
+
+```bash
+bash scripts/restore.sh restore backups/pos-<stamp>.dump.gz [backups/uploads-<stamp>.tgz]
+```
+
+It `--drop`-restores the `pos` namespace through the running mongo
+container using the root credentials already in that container's
+environment. It stops `api` and `file` for the duration — a restore racing
+live sales can silently discard them — and drops the `pos` database before
+replaying, because `--drop` clears only the collections the archive contains
+and anything created since the backup would otherwise survive. When an
+uploads archive is given it wipes the volume into the archive's contents and
+re-hands ownership to uid 65534. It starts both services again and finishes
+by waiting for both `/readyz` probes. The application user survives all of
+this: its record lives in `admin.system.users`, not in the dropped database.
+
+The database name and `BACKUP_DIR` are read from `.env` the way compose reads
+them, so a no-argument drill looks in the directory the backup service really
+writes to.
 
 ## Run locally (dev)
 
@@ -228,7 +382,12 @@ cd POS/file && cp .env.example .env && dart pub get && dart_frog dev --port 8080
 cd POS/api  && cp .env.example .env && dart pub get && dart run scripts/seed.dart && dart_frog dev --port 3000
 ```
 
-(`MONGODB_URI` defaults to `mongodb://localhost:27017/pos`; a `docker compose up mongo` is enough to start the database.)
+(`docker compose up mongo` starts the database, but with authentication: a
+plain `MONGODB_URI=mongodb://localhost:27017/pos` is rejected — use the
+application user from `.env`, e.g.
+`mongodb://<MONGO_APP_USER>:<MONGO_APP_PASSWORD>@localhost:27017/pos?authSource=pos`,
+or leave `MONGODB_URI` empty and set the discrete `MONGO_*` parts the
+services' `.env.example` files describe.)
 
 ## Auth
 

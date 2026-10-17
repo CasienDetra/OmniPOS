@@ -4,20 +4,37 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    # Authentication is part of the definition, not a deploy-time option:
+    # a stack that silently runs credential-free is how anyone who can
+    # reach this port reads every sale. Enabling --auth never creates users
+    # on an existing volume, so a populated host follows the runbook in the
+    # README before its first authenticated deploy.
+    command: ["mongod", "--auth"]
+    environment:
+      # Root user: only consumed on a brand-new data directory, but kept in
+      # the environment afterwards because the healthcheck authenticates.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?MONGO_ROOT_USERNAME is required - set it in .env (see .env.example)}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required - set it in .env (see .env.example)}
+      # Consumed by docker/mongo-init.sh when it creates the app user.
+      MONGO_APP_DATABASE: ${MONGO_APP_DATABASE:-pos}
+      MONGO_APP_USER: ${MONGO_APP_USER:?MONGO_APP_USER is required - set it in .env (see .env.example)}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - set it in .env (see .env.example)}
     volumes:
       - mongo-data:/data/db
+      # Sourced (not executed) by the entrypoint once per fresh volume.
+      - ./docker/mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh:ro
     # Loopback only: the services talk to mongo over the compose network, so
     # nothing outside this machine needs the port exposed.
     ports:
       - "127.0.0.1:${MONGO_HOST_PORT:-27017}:27017"
     healthcheck:
+      # Authenticates as root on purpose. A bare ping passes even when the
+      # users were never created or auth is misconfigured — exactly the
+      # states that must turn visibly red instead of green.
       test:
         [
-          "CMD",
-          "mongosh",
-          "--quiet",
-          "--eval",
-          "db.adminCommand('ping').ok",
+          "CMD-SHELL",
+          "mongosh --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\"",
         ]
       interval: 5s
       timeout: 5s
@@ -29,7 +46,14 @@ services:
     restart: unless-stopped
     environment:
       PORT: "8080"
-      MONGODB_URI: mongodb://mongo:27017/pos
+      # Passed as discrete pieces rather than one MONGODB_URI: both services
+      # percent-encode the password themselves (see their app_config.dart),
+      # so this keeps working for credentials that contain symbols.
+      MONGO_HOST: mongo
+      MONGO_PORT: "27017"
+      MONGO_DATABASE: ${MONGO_APP_DATABASE:-pos}
+      MONGO_USERNAME: ${MONGO_APP_USER:?MONGO_APP_USER is required - set it in .env (see .env.example)}
+      MONGO_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - set it in .env (see .env.example)}
       UPLOAD_DIR: public/uploads
     volumes:
       - file-uploads:/app/public/uploads
@@ -56,7 +80,11 @@ services:
     restart: unless-stopped
     environment:
       PORT: "3000"
-      MONGODB_URI: mongodb://mongo:27017/pos
+      MONGO_HOST: mongo
+      MONGO_PORT: "27017"
+      MONGO_DATABASE: ${MONGO_APP_DATABASE:-pos}
+      MONGO_USERNAME: ${MONGO_APP_USER:?MONGO_APP_USER is required - set it in .env (see .env.example)}
+      MONGO_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - set it in .env (see .env.example)}
       # No default on purpose: a placeholder secret would sign every token.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set it}
       FILE_BASE_URL: http://file:8080
@@ -73,6 +101,51 @@ services:
       start_period: 15s
     ports:
       - "${API_BIND_ADDRESS:-0.0.0.0}:3000:3000"
+
+  backup:
+    # The backup is a compose service rather than a host cron because the
+    # deploy bundle is just these compose files plus scripts/: a cron job
+    # would be a setup step on the host that no pipeline owns and that a
+    # rebuilt machine silently loses. Same image as mongo on purpose: it
+    # ships a version-matched mongodump, so a dump can never come from a
+    # client older than the server it reads.
+    image: mongo:7
+    restart: unless-stopped
+    command: ["bash", "/backup.sh"]
+    environment:
+      MONGO_HOST: mongo
+      MONGO_PORT: "27017"
+      MONGO_DATABASE: ${MONGO_APP_DATABASE:-pos}
+      # The application user's readWrite is exactly mongodump's need on one
+      # database: no root password sits in the backup container.
+      MONGO_USERNAME: ${MONGO_APP_USER:?MONGO_APP_USER is required - set it in .env (see .env.example)}
+      MONGO_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - set it in .env (see .env.example)}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+    volumes:
+      # The loop itself travels with the compose files - on the deploy host
+      # scripts/ arrives through the bundle copied by deploy.yml.
+      - ./scripts/backup.sh:/backup.sh:ro
+      # A host directory, deliberately outside every docker volume: the
+      # disaster being guarded against is losing the volumes themselves.
+      - ${BACKUP_DIR:-./backups}:/backups
+      - file-uploads:/uploads:ro
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      # Freshness of the last success, not process aliveness: a loop that
+      # quietly stopped backing up would otherwise still report running.
+      # Four intervals of grace survive a restore outage or a slow tar.
+      test:
+        [
+          "CMD-SHELL",
+          "last=$$(cat /backups/.last-success 2>/dev/null || echo 0); now=$$(date +%s); bound=$${BACKUP_INTERVAL_SECONDS:-21600}; test $$(( now - last )) -le $$(( bound * 4 ))",
+        ]
+      interval: 10m
+      timeout: 10s
+      retries: 3
+      start_period: 15m
 
 volumes:
   mongo-data:

@@ -29,14 +29,67 @@ disagrees with either service's `pubspec.yaml` or with an entry here.
   the GitHub Actions.
 - `.githooks/pre-commit` and `.githooks/commit-msg`, opt-in with
   `git config core.hooksPath .githooks`.
+- MongoDB authentication: the server starts with `--auth`, a root user is
+  created from `MONGO_ROOT_*` on a fresh volume, `docker/mongo-init.sh`
+  creates the least-privilege `MONGO_APP_*` user (readWrite on `pos`), and
+  api, file and backup all connect as the app user. A runbook in the README
+  covers the retroactive case — enabling auth never creates users on an
+  existing volume.
+- A `backup` service: hourly-cadence `mongodump --archive --gzip` of `pos`
+  plus a tar of the uploads volume into `BACKUP_DIR` on host disk, with
+  count-based retention, `.part`-then-rename writes, a freshness healthcheck,
+  and `scripts/restore.sh drill` to prove an archive restores into a
+  throwaway container. Both scripts travel in the deploy bundle.
+- Container hardening: both images run as uid 65534; the deploy overlay adds
+  `cap_drop: ALL` (with only what each entrypoint proves it needs added
+  back), `no-new-privileges`, and read-only root filesystems with tmpfs
+  where a path genuinely must be writable.
+- Resource ceilings in the deploy overlay — memory, CPU and pids per service,
+  sized and justified for a small shop's single 4 GB host.
 
 ### Changed
+
+- `MONGO_ROOT_*` and `MONGO_APP_*` are required compose interpolations next
+  to `JWT_SECRET`: the stack refuses to start credential-free.
+- Both services receive discrete `MONGO_*` connection variables instead of a
+  hardcoded `MONGODB_URI`, so passwords with symbols still connect (the
+  services percent-encode).
+- The deploy bundle grew: `deploy.yml` now also copies `scripts/backup.sh`,
+  `scripts/restore.sh` and `docker/mongo-init.sh`, and `deploy.sh` chowns
+  the uploads volume to uid 65534 before starting the stack.
 
 - `api` waits for the file service to report healthy rather than merely
   started.
 - `main` is a protected branch: changes arrive through a pull request whose
   `API`, `File service`, `Check workflow syntax` and `Live stack` checks are
   green, and cannot be force-pushed over.
+
+### Fixed
+
+- `scripts/backup.sh` can no longer publish a failed round as a good backup.
+  Every step propagates its own failure: a `mongodump` or `tar` that exits
+  non-zero leaves no archive, does not move `.last-success`, does not prune,
+  and has its `*.part` cleaned up. Previously the `if !` that called the
+  function suppressed `set -e` for its whole body, so a half-written dump was
+  renamed as a complete one and the freshness marker advanced over it.
+- `scripts/restore.sh restore` stops `api` and `file` while it runs, so a sale
+  or upload arriving mid-restore can no longer be silently discarded.
+- `scripts/restore.sh restore` drops the `pos` database before replaying the
+  archive. `mongorestore --drop` clears only the collections the archive
+  contains, so anything created since the backup used to survive a restore and
+  the database never returned to the chosen snapshot.
+- `scripts/restore.sh` resolves `BACKUP_DIR` from `.env` the way compose does,
+  so a no-argument `drill` looks at the directory the backup service actually
+  writes to instead of `./backups`.
+- The uploads archive name is passed to the unpack container as an argument
+  rather than interpolated into its `sh -c` program, closing command execution
+  through a crafted filename.
+- `docker/mongo-init.sh` reads the credentials from the environment inside
+  `mongosh` rather than interpolating them into the script text, so a password
+  containing a quote stays data instead of becoming executable code.
+- `.env.example` ships blank MongoDB passwords. Non-empty placeholders
+  satisfied the compose non-empty check, so a quick-start install could be
+  serving real sales with published credentials.
 
 ## [1.0.0] - 2026-10-06
 

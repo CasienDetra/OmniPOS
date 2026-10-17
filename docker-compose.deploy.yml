@@ -11,6 +11,35 @@
 # right value depends on what can reach this machine.
 #   API_BIND_ADDRESS=127.0.0.1     when a TLS proxy on the host terminates
 #   API_BIND_ADDRESS=192.168.1.20  when terminals on a LAN connect directly
+#
+# Everything below the first services: entry splits in two kinds: the
+# security options (capabilities, no-new-privileges, read-only root
+# filesystems) and the resource limits. They live here, not in the base
+# file, because the base file must stay pleasant to develop against - a
+# developer's hand-run container and one-off `docker compose run` commands
+# would trip over a read-only rootfs that only matters against the open
+# internet.
+#
+# Resource limits - how the numbers were picked
+#   The reference machine is what "a small shop's single host" means here:
+#   4 GB RAM, 2 cores, nothing else on it. Memory caps are ceilings, not
+#   reservations, and the sum (3.25 GB) sits below physical RAM so the worst
+#   simultaneous peaks still leave room for the OS; the host would rather
+#   OOM-kill one contained service than thrash swap with the till mid-sale.
+#   mongo gets the biggest slice because it holds a real cache: the command
+#   pins WiredTiger to 1 GB so the cache is sized against this limit instead
+#   of against whatever the host's total memory happens to be. api is a
+#   compiled Dart server at rest well under 100 MB; 512 MB is headroom for
+#   bursts. file's 1 GB is not generous - the service currently reads a
+#   whole upload into memory before writing it (readAsBytes), so the cap
+#   must exceed MAX_UPLOAD_BYTES for legitimate big uploads; lower
+#   MAX_UPLOAD_BYTES in the host .env instead of raising this. backup only
+#   streams dumps through gzip and tar. CPU caps are burst ceilings that
+#   deliberately overcommit 2 cores: their job is to keep one runaway query
+#   from starving the rest, not to divide the machine. pids limits are the
+#   fork-bomb fuse; none of these processes forks threads-of-process by
+#   design, so the margins are large on purpose. Re-size by hand on a host
+#   with different RAM - compose cannot derive any of this from reality.
 services:
   api:
     # IMAGE_TAG is set by scripts/deploy.sh to the sha-<commit> tag that
@@ -24,6 +53,20 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    # The scratch image runs one static binary that opens sockets and
+    # nothing else; /tmp exists only so the Dart runtime has somewhere to
+    # put a temp file should it ever want one.
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+          pids: 100
 
   file:
     image: ghcr.io/casiendetra/pos-file:${IMAGE_TAG:?IMAGE_TAG is set by the deploy script}
@@ -34,6 +77,23 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    # The uploads volume mounted by the base file stays writable even with a
+    # read-only root filesystem - that is how the service keeps working here,
+    # and the readiness probe's write test (file/routes/readyz.dart) is what
+    # proves it on every healthcheck.
+    read_only: true
+    tmpfs:
+      # dart_frog's multipart parsing and Dart's temp files want /tmp; the
+      # uploads themselves never touch it.
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
+          pids: 100
 
   mongo:
     restart: unless-stopped
@@ -42,3 +102,65 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    # Pin the cache so the memory limit below actually bounds the process
+    # instead of merely executing it; 1 GB of cache plus working set fits
+    # under 1.5 GB. This command replaces the base file's ["mongod",
+    # "--auth"], so --auth is repeated deliberately.
+    command: ["mongod", "--auth", "--wiredTigerCacheSizeGB", "1"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    # mongod itself needs no capabilities, but the image's entrypoint does
+    # its work as root before dropping to the mongod user: chowning and
+    # traversing the data volume (DAC_OVERRIDE - with ALL really dropped,
+    # even uid 0 is stopped by the 700 directories mongod owns), and
+    # setuid'ing into the daemon. Anything beyond these five - NET_ADMIN
+    # for sniffing, SYS_MODULE for kernel tricks - stays dropped.
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE, SETUID, SETGID]
+    # Read-only rootfs, with tmpfs for the three paths the entrypoint
+    # writes before mongod takes over: nothing here needs to survive a
+    # restart, and losing a /data/configdb that we never put a config in
+    # is not a loss.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /data/configdb
+      - /var/log/mongodb
+    deploy:
+      resources:
+        limits:
+          memory: 1500m
+          cpus: "1.5"
+          # mongod is one process with a thread pool; 300 threads is far
+          # above what this workload opens, but far below a system's thread
+          # ceiling.
+          pids: 300
+
+  backup:
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    # This container still runs as root, the one deliberate exception here:
+    # the dumps must land in a host directory whose owner the deploy cannot
+    # predict, and mongodump/tar only need to read the world-readable volume
+    # files they were handed. DAC_OVERRIDE is what lets that root survive the
+    # capability drop - with ALL really dropped, uid 0 is subject to file
+    # permissions like anyone else. No setuid helper runs here, so
+    # no-new-privileges costs nothing.
+    cap_add: [DAC_OVERRIDE]
+    # read_only is safe here: /backup.sh is bind-mounted read-only by the
+    # base file - compatible with a read-only rootfs - and the loop only
+    # ever writes into /backups and /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+          pids: 50
