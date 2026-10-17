@@ -63,6 +63,16 @@ jobs:
           docker compose logs --tail=100 api file
           echo "the stack never became ready"
           exit 1
+      - name: Assert the backup service actually backed up
+        # Nothing else in this workflow touches the backup service, so a backup
+        # that never ran, or crash-looped on every round, would otherwise leave
+        # this workflow green. The base file mounts BACKUP_DIR at ./backups.
+        run: |
+          test -f backups/.last-success
+          shopt -s nullglob
+          dumps=(backups/pos-*.dump.gz)
+          echo "dump archives: ${dumps[*]}"
+          test "${#dumps[@]}" -ge 1
       - name: Integration tests and smoke script
         # Host networking so the container reaches the published ports; the
         # toolchain is the same image the service builds run in.
