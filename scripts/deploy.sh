@@ -54,6 +54,21 @@ start() {
 
 echo "deploying $image_tag (currently: ${previous:-nothing})"
 
+# api and file now run as uid 65534 (see the Dockerfiles). A file-uploads
+# volume created by the older root-owned images would reject the service's
+# first write, which the readiness probe would catch and turn into a
+# rollback loop - so hand ownership over before starting. Idempotent and
+# cheap at a small shop's file counts; runs outside start() because the
+# rollback path must not repeat it while racing the readiness clock.
+# mongo:7 rather than a fresh pull of alpine on purpose: the guard below
+# only passes on a host that has already run this stack, so that image is
+# already local and the deploy path gains no new registry dependency to
+# fail on under set -e.
+if docker volume inspect pos_file-uploads > /dev/null 2>&1; then
+  docker run --rm -v pos_file-uploads:/d mongo:7 \
+    chown -R 65534:65534 /d
+fi
+
 if ! start; then
   if [ -n "$previous" ] && [ "$previous" != "$image_tag" ]; then
     echo "deploy failed, rolling back to $previous" >&2

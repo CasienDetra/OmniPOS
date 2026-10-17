@@ -106,10 +106,17 @@ jobs:
         run: |
           set -euo pipefail
           target="$DEPLOY_USER@$DEPLOY_HOST"
-          ssh -i ~/.ssh/deploy_key "$target" "mkdir -p '$DEPLOY_DIR'"
+          # The compose files bind-mount ./scripts and ./docker, so the host
+          # needs the same relative layout the repository has: the backup
+          # loop, the restore drill, and the mongo auth init script all
+          # travel with the deploy instead of being installed by hand.
+          ssh -i ~/.ssh/deploy_key "$target" \
+            "mkdir -p '$DEPLOY_DIR' '$DEPLOY_DIR/scripts' '$DEPLOY_DIR/docker'"
           scp -i ~/.ssh/deploy_key docker-compose.yml "$target:$DEPLOY_DIR/"
           scp -i ~/.ssh/deploy_key docker-compose.deploy.yml "$target:$DEPLOY_DIR/"
           scp -i ~/.ssh/deploy_key scripts/deploy.sh "$target:$DEPLOY_DIR/deploy.sh"
+          scp -i ~/.ssh/deploy_key scripts/backup.sh scripts/restore.sh "$target:$DEPLOY_DIR/scripts/"
+          scp -i ~/.ssh/deploy_key docker/mongo-init.sh "$target:$DEPLOY_DIR/docker/"
 
       - name: Deploy and wait for readiness
         env:

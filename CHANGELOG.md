@@ -29,8 +29,34 @@ disagrees with either service's `pubspec.yaml` or with an entry here.
   the GitHub Actions.
 - `.githooks/pre-commit` and `.githooks/commit-msg`, opt-in with
   `git config core.hooksPath .githooks`.
+- MongoDB authentication: the server starts with `--auth`, a root user is
+  created from `MONGO_ROOT_*` on a fresh volume, `docker/mongo-init.sh`
+  creates the least-privilege `MONGO_APP_*` user (readWrite on `pos`), and
+  api, file and backup all connect as the app user. A runbook in the README
+  covers the retroactive case — enabling auth never creates users on an
+  existing volume.
+- A `backup` service: hourly-cadence `mongodump --archive --gzip` of `pos`
+  plus a tar of the uploads volume into `BACKUP_DIR` on host disk, with
+  count-based retention, `.part`-then-rename writes, a freshness healthcheck,
+  and `scripts/restore.sh drill` to prove an archive restores into a
+  throwaway container. Both scripts travel in the deploy bundle.
+- Container hardening: both images run as uid 65534; the deploy overlay adds
+  `cap_drop: ALL` (with only what each entrypoint proves it needs added
+  back), `no-new-privileges`, and read-only root filesystems with tmpfs
+  where a path genuinely must be writable.
+- Resource ceilings in the deploy overlay — memory, CPU and pids per service,
+  sized and justified for a small shop's single 4 GB host.
 
 ### Changed
+
+- `MONGO_ROOT_*` and `MONGO_APP_*` are required compose interpolations next
+  to `JWT_SECRET`: the stack refuses to start credential-free.
+- Both services receive discrete `MONGO_*` connection variables instead of a
+  hardcoded `MONGODB_URI`, so passwords with symbols still connect (the
+  services percent-encode).
+- The deploy bundle grew: `deploy.yml` now also copies `scripts/backup.sh`,
+  `scripts/restore.sh` and `docker/mongo-init.sh`, and `deploy.sh` chowns
+  the uploads volume to uid 65534 before starting the stack.
 
 - `api` waits for the file service to report healthy rather than merely
   started.

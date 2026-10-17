@@ -24,5 +24,12 @@ COPY --from=build /runtime/ /
 COPY --from=build /app/server /app/server
 COPY --from=build /app/seed /app/seed
 COPY --from=build /app/probe /app/probe
+# scratch has no /etc/passwd, so the id must be numeric. 65534 is nobody on
+# Debian, which is what the file service runs as: both containers share the
+# uploads volume's owner even though only file writes it. Ports above 1024
+# mean this costs nothing, and a uid 0 process reached by an exploit would
+# still be root only inside a container the compose layer has already taken
+# its capabilities away from - belt and braces.
+USER 65534:65534
 EXPOSE 3000
 CMD ["/app/server"]

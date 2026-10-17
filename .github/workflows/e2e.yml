@@ -35,6 +35,12 @@ jobs:
     env:
       # Only used by this throwaway runner; never a production secret.
       JWT_SECRET: ci-ephemeral-secret
+      # The stack refuses to interpolate without MongoDB credentials (see
+      # docker-compose.yml); these are as disposable as the runner itself.
+      MONGO_ROOT_USERNAME: pos_root
+      MONGO_ROOT_PASSWORD: ci-only-root-password
+      MONGO_APP_USER: pos_app
+      MONGO_APP_PASSWORD: ci-only-app-password
     steps:
       - uses: actions/checkout@v7
       - name: Build and start the stack
