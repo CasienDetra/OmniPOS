@@ -2,7 +2,7 @@
 #
 # Base images are pinned to match api/Dockerfile and the CI workflow, so a
 # toolchain release can never change a build behind our back.
-FROM dart:3.13.4 AS build
+FROM dart:3.13.5 AS build
 WORKDIR /app
 COPY pubspec.* ./
 RUN dart pub get --enforce-lockfile
