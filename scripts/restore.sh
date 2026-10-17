@@ -11,27 +11,31 @@
 # service, and at least quarterly. With no argument it drills the newest
 # dump found in BACKUP_DIR.
 #
-# restore is the real thing and is destructive: --drop removes the live
-# pos collections before replaying the archive, and unpacking an uploads
-# archive wipes the file-uploads volume first. It asks for the word yes
-# unless --yes is given.
+# restore is the real thing and is destructive: it stops api and file for its
+# duration, drops the live pos database before replaying the archive, and
+# unpacking an uploads archive wipes the file-uploads volume first. It asks
+# for the word yes unless --yes is given.
 #
-# Run from the repository / DEPLOY_DIR root. The database name is read from
-# .env below; the root credentials come from the running mongo container's
-# own environment, so they never reach this host.
+# Run from the repository / DEPLOY_DIR root. The database name and backup
+# directory are read from .env below; the root credentials come from the
+# running mongo container's own environment, so they never reach this host.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-backup_dir="${BACKUP_DIR:-./backups}"
-# The database the services use, resolved the way compose resolves it: an
-# exported MONGO_APP_DATABASE wins, then the key in this .env, then pos.
-# Hard-coding the name made the archive match no namespace, so both modes
-# below reported success while changing nothing.
-db="${MONGO_APP_DATABASE:-}"
-if [ -z "$db" ]; then
-  db="$(sed -n 's/^MONGO_APP_DATABASE=//p' .env 2> /dev/null | tail -n 1 || true)"
-fi
-db="${db:-pos}"
+# Both settings resolve the way compose resolves them: an exported value wins,
+# then the key in this .env, then the default. Hard-coding the database name
+# once made the archive match no namespace, and resolving only the database
+# name made a no-argument drill search ./backups while the backup service
+# wrote elsewhere - both looked healthy while changing nothing.
+from_env() {
+  local value="${!1:-}"
+  if [ -z "$value" ]; then
+    value="$(sed -n "s/^$1=//p" .env 2> /dev/null | tail -n 1 || true)"
+  fi
+  printf '%s' "${value:-$2}"
+}
+backup_dir="$(from_env BACKUP_DIR ./backups)"
+db="$(from_env MONGO_APP_DATABASE pos)"
 
 usage() {
   # Everything above the first line of code, so the header can grow freely.
@@ -96,11 +100,24 @@ restore() {
     [ "$answer" = "yes" ] || { echo "aborted"; exit 1; }
   fi
 
+  echo "--- stopping api and file so nothing writes mid-restore"
+  docker compose stop api file
+
   echo "--- restoring the database via the running mongo container"
   # The root user exists on any host created after auth was introduced; on
   # a pre-auth host the runbook created it first. Either way it lives in
   # the container's environment, so the password never appears on the host.
+  #
+  # The database is dropped first because --drop clears only the collections
+  # the archive contains: anything created since the backup would survive and
+  # the database would never return to the snapshot. User records live in
+  # admin.system.users, so dropping pos leaves the application user intact.
   docker compose exec -T mongo bash -c '
+    set -e
+    mongosh --host 127.0.0.1 --quiet \
+      -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
+      --authenticationDatabase admin \
+      --eval "db.getSiblingDB(\"$1\").dropDatabase()"
     mongorestore --host 127.0.0.1 \
       -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
       --authenticationDatabase admin --gzip --archive --drop \
@@ -109,19 +126,33 @@ restore() {
 
   if [ -n "$uploads" ]; then
     echo "--- replacing the uploads volume"
-    docker compose stop file
     # Empty the volume, unpack the archive, hand ownership to the uid the
-    # file service runs as (see file/Dockerfile).
+    # file service runs as (see file/Dockerfile). The archive path is passed
+    # as an argument instead of being pasted into the program text: a name
+    # containing a double quote would otherwise close the argument early and
+    # run whatever followed it.
     docker run --rm \
       -v pos_file-uploads:/d \
       -v "$(cd "$(dirname "$uploads")" && pwd):/b:ro" \
       alpine sh -c '
         find /d -mindepth 1 -delete
-        tar xzf "/b/'"$(basename "$uploads")"'" -C /d
+        tar xzf "$1" -C /d
         chown -R 65534:65534 /d
-      '
-    docker compose start file
+      ' sh "/b/$(basename "$uploads")"
   fi
+
+  echo "--- starting api and file again"
+  docker compose start api file
+
+  # They were stopped, so wait for the apps to bind their ports rather than
+  # assuming they were already serving.
+  for _ in $(seq 1 30); do
+    if docker compose exec -T api /app/probe http://127.0.0.1:3000/readyz > /dev/null 2>&1 \
+      && docker compose exec -T file /app/probe http://127.0.0.1:8080/readyz > /dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
 
   echo "--- verifying the live stack agrees"
   docker compose exec -T api /app/probe http://127.0.0.1:3000/readyz

@@ -13,12 +13,12 @@ services:
     environment:
       # Root user: only consumed on a brand-new data directory, but kept in
       # the environment afterwards because the healthcheck authenticates.
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?MONGO_ROOT_USERNAME is required - copy .env.example to .env}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required - copy .env.example to .env}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?MONGO_ROOT_USERNAME is required - set it in .env (see .env.example)}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required - set it in .env (see .env.example)}
       # Consumed by docker/mongo-init.sh when it creates the app user.
       MONGO_APP_DATABASE: ${MONGO_APP_DATABASE:-pos}
-      MONGO_APP_USER: ${MONGO_APP_USER:?MONGO_APP_USER is required - copy .env.example to .env}
-      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - copy .env.example to .env}
+      MONGO_APP_USER: ${MONGO_APP_USER:?MONGO_APP_USER is required - set it in .env (see .env.example)}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - set it in .env (see .env.example)}
     volumes:
       - mongo-data:/data/db
       # Sourced (not executed) by the entrypoint once per fresh volume.
@@ -52,8 +52,8 @@ services:
       MONGO_HOST: mongo
       MONGO_PORT: "27017"
       MONGO_DATABASE: ${MONGO_APP_DATABASE:-pos}
-      MONGO_USERNAME: ${MONGO_APP_USER:?MONGO_APP_USER is required - copy .env.example to .env}
-      MONGO_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - copy .env.example to .env}
+      MONGO_USERNAME: ${MONGO_APP_USER:?MONGO_APP_USER is required - set it in .env (see .env.example)}
+      MONGO_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - set it in .env (see .env.example)}
       UPLOAD_DIR: public/uploads
     volumes:
       - file-uploads:/app/public/uploads
@@ -83,8 +83,8 @@ services:
       MONGO_HOST: mongo
       MONGO_PORT: "27017"
       MONGO_DATABASE: ${MONGO_APP_DATABASE:-pos}
-      MONGO_USERNAME: ${MONGO_APP_USER:?MONGO_APP_USER is required - copy .env.example to .env}
-      MONGO_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - copy .env.example to .env}
+      MONGO_USERNAME: ${MONGO_APP_USER:?MONGO_APP_USER is required - set it in .env (see .env.example)}
+      MONGO_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - set it in .env (see .env.example)}
       # No default on purpose: a placeholder secret would sign every token.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set it}
       FILE_BASE_URL: http://file:8080
@@ -118,8 +118,8 @@ services:
       MONGO_DATABASE: ${MONGO_APP_DATABASE:-pos}
       # The application user's readWrite is exactly mongodump's need on one
       # database: no root password sits in the backup container.
-      MONGO_USERNAME: ${MONGO_APP_USER:?MONGO_APP_USER is required - copy .env.example to .env}
-      MONGO_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - copy .env.example to .env}
+      MONGO_USERNAME: ${MONGO_APP_USER:?MONGO_APP_USER is required - set it in .env (see .env.example)}
+      MONGO_PASSWORD: ${MONGO_APP_PASSWORD:?MONGO_APP_PASSWORD is required - set it in .env (see .env.example)}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
       BACKUP_KEEP: ${BACKUP_KEEP:-14}
     volumes:

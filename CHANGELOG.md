@@ -64,6 +64,33 @@ disagrees with either service's `pubspec.yaml` or with an entry here.
   `API`, `File service`, `Check workflow syntax` and `Live stack` checks are
   green, and cannot be force-pushed over.
 
+### Fixed
+
+- `scripts/backup.sh` can no longer publish a failed round as a good backup.
+  Every step propagates its own failure: a `mongodump` or `tar` that exits
+  non-zero leaves no archive, does not move `.last-success`, does not prune,
+  and has its `*.part` cleaned up. Previously the `if !` that called the
+  function suppressed `set -e` for its whole body, so a half-written dump was
+  renamed as a complete one and the freshness marker advanced over it.
+- `scripts/restore.sh restore` stops `api` and `file` while it runs, so a sale
+  or upload arriving mid-restore can no longer be silently discarded.
+- `scripts/restore.sh restore` drops the `pos` database before replaying the
+  archive. `mongorestore --drop` clears only the collections the archive
+  contains, so anything created since the backup used to survive a restore and
+  the database never returned to the chosen snapshot.
+- `scripts/restore.sh` resolves `BACKUP_DIR` from `.env` the way compose does,
+  so a no-argument `drill` looks at the directory the backup service actually
+  writes to instead of `./backups`.
+- The uploads archive name is passed to the unpack container as an argument
+  rather than interpolated into its `sh -c` program, closing command execution
+  through a crafted filename.
+- `docker/mongo-init.sh` reads the credentials from the environment inside
+  `mongosh` rather than interpolating them into the script text, so a password
+  containing a quote stays data instead of becoming executable code.
+- `.env.example` ships blank MongoDB passwords. Non-empty placeholders
+  satisfied the compose non-empty check, so a quick-start install could be
+  serving real sales with published credentials.
+
 ## [1.0.0] - 2026-10-06
 
 First release of the Dart Frog + MongoDB POS backend.

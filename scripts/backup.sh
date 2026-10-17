@@ -24,6 +24,12 @@ run_backup() {
   # Sortable UTC stamp: ls|sort below relies on it ordering by time.
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 
+  # Every step propagates its own failure with `|| return 1`. The callers
+  # below run this function as an `if` condition, which switches errexit off
+  # for the whole body - without these, a failed mongodump falls through to
+  # the `mv`, publishing a half-written archive as a good one and advancing
+  # .last-success over it.
+  #
   # --archive with no value streams to stdout; the redirect keeps the .part
   # discipline. Flags rather than a URI so the password never needs percent
   # encoding. Authentication against the app database, as the app user.
@@ -31,16 +37,16 @@ run_backup() {
     --host "$MONGO_HOST" --port "$MONGO_PORT" \
     --username "$MONGO_USERNAME" --password "$MONGO_PASSWORD" \
     --authenticationDatabase "$db" \
-    --db "$db" --archive --gzip > "$out/pos-$stamp.dump.gz.part"
-  mv "$out/pos-$stamp.dump.gz.part" "$out/pos-$stamp.dump.gz"
+    --db "$db" --archive --gzip > "$out/pos-$stamp.dump.gz.part" || return 1
+  mv "$out/pos-$stamp.dump.gz.part" "$out/pos-$stamp.dump.gz" || return 1
 
-  tar czf "$out/uploads-$stamp.tgz.part" -C /uploads .
-  mv "$out/uploads-$stamp.tgz.part" "$out/uploads-$stamp.tgz"
+  tar czf "$out/uploads-$stamp.tgz.part" -C /uploads . || return 1
+  mv "$out/uploads-$stamp.tgz.part" "$out/uploads-$stamp.tgz" || return 1
 
   # The only file the healthcheck reads: epoch of the last fully successful
   # round, so a silent failure turns the container red within four intervals.
-  date -u +%s > "$out/.last-success.part"
-  mv "$out/.last-success.part" "$out/.last-success"
+  date -u +%s > "$out/.last-success.part" || return 1
+  mv "$out/.last-success.part" "$out/.last-success" || return 1
 }
 
 prune() {
@@ -55,14 +61,24 @@ prune() {
   done
 }
 
+# A failed round leaves a *.part carrying that round's stamp, and the next
+# attempt writes a fresh one, so nothing else would ever collect it.
+discard_partials() {
+  rm -f "$out"/*.part
+}
+
 # Replace-or-crash beats silent rot: if the very first round fails because
 # the deployment forgot a credential, exit and let the restart policy make
-# the container visibly unhealthy instead of idling green forever.
-if ! run_backup; then
+# the container visibly unhealthy instead of idling green forever. Pruning is
+# tied to a successful round, so retention can never thin the good archives on
+# the strength of a round that did not produce one.
+if run_backup; then
+  prune
+else
+  discard_partials
   echo "first backup failed" >&2
   exit 1
 fi
-prune
 
 trap 'exit 0' TERM INT
 while :; do
@@ -70,8 +86,10 @@ while :; do
   # of after the remainder of the interval.
   sleep "$interval" &
   wait $!
-  if ! run_backup; then
+  if run_backup; then
+    prune
+  else
+    discard_partials
     echo "backup round failed; will retry in ${interval}s" >&2
   fi
-  prune
 done

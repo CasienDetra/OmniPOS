@@ -6,13 +6,17 @@
 # runs this file: see the "Enabling auth on an existing host" runbook in
 # the README for creating the users by hand on a deployed host.
 #
-# The guards make every step "create if missing", so the same snippet the
-# runbook tells a human to paste into a mongosh session can also be run
-# against a database that already has the users without failing.
+# The guards make every step "create if missing", so this also runs unharmed
+# against a database that already has the users.
 #
-# Passwords are interpolated into mongosh here and into mongodump's argv
-# in scripts/backup.sh, so they must stay free of quotes, $ and backticks;
-# generate them with `openssl rand -hex 16`.
+# The credentials are read from the environment inside mongosh instead of
+# being interpolated into the script text, so a password containing a quote
+# stays data rather than becoming code. The README runbook does interpolate
+# them, so keep generating anything pasted there with `openssl rand -hex 16`.
+#
+# The eval string is double-quoted only because the JavaScript below is full
+# of single quotes; nothing is interpolated into it, so the shell has no `$`
+# to expand.
 
 set -euo pipefail
 
@@ -21,17 +25,17 @@ mongosh --quiet \
   -p "$MONGO_INITDB_ROOT_PASSWORD" \
   --authenticationDatabase admin \
   --eval "
-const appDb = db.getSiblingDB('$MONGO_APP_DATABASE');
-if (!appDb.getUser('$MONGO_APP_USER')) {
+const appDb = db.getSiblingDB(process.env.MONGO_APP_DATABASE);
+if (!appDb.getUser(process.env.MONGO_APP_USER)) {
   appDb.createUser({
-    user: '$MONGO_APP_USER',
-    pwd:  '$MONGO_APP_PASSWORD',
+    user: process.env.MONGO_APP_USER,
+    pwd:  process.env.MONGO_APP_PASSWORD,
     // readWrite alone is enough for everything api and file do: it grants
     // collection creation and createIndex as a side effect of write.
-    roles: [{ role: 'readWrite', db: '$MONGO_APP_DATABASE' }],
+    roles: [{ role: 'readWrite', db: process.env.MONGO_APP_DATABASE }],
   });
-  print('created application user ' + '$MONGO_APP_USER');
+  print('created application user ' + process.env.MONGO_APP_USER);
 } else {
-  print('application user ' + '$MONGO_APP_USER' + ' already exists');
+  print('application user ' + process.env.MONGO_APP_USER + ' already exists');
 }
 "

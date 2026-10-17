@@ -326,11 +326,13 @@ the volumes themselves:
   goes red when that file ages past four intervals, so a loop that quietly
   stopped cannot hide behind a running process.
 
-Both land as `*.part` and are renamed only after success, and the two newest
-kinds of each archive survive `BACKUP_KEEP` pruning (default 14 — about
-three and a half days at six-hourly). Off-site copies are not in scope: a
-host fire is still an untested single copy; mirror `BACKUP_DIR` somewhere
-else if the shop cannot carry that risk.
+Both land as `*.part` and are renamed only after success: a round that fails
+publishes nothing, leaves `.last-success` where it was and prunes nothing, so
+retention can never thin the good archives on the strength of a bad round.
+The newest `BACKUP_KEEP` of each kind survive (default 14 — about three and a
+half days at six-hourly). Off-site copies are not in scope: a host fire is
+still an untested single copy; mirror `BACKUP_DIR` somewhere else if the shop
+cannot carry that risk.
 
 The drill is what makes any of this real — an untested backup is not a
 backup. `scripts/restore.sh drill` starts a throwaway `mongo:7` container,
@@ -357,9 +359,18 @@ bash scripts/restore.sh restore backups/pos-<stamp>.dump.gz [backups/uploads-<st
 
 It `--drop`-restores the `pos` namespace through the running mongo
 container using the root credentials already in that container's
-environment, and — when an uploads archive is given — stops `file`, wipes
-the volume into the archive's contents, re-hands ownership to uid 65534 and
-starts `file` again. It finishes by probing both `/readyz`.
+environment. It stops `api` and `file` for the duration — a restore racing
+live sales can silently discard them — and drops the `pos` database before
+replaying, because `--drop` clears only the collections the archive contains
+and anything created since the backup would otherwise survive. When an
+uploads archive is given it wipes the volume into the archive's contents and
+re-hands ownership to uid 65534. It starts both services again and finishes
+by waiting for both `/readyz` probes. The application user survives all of
+this: its record lives in `admin.system.users`, not in the dropped database.
+
+The database name and `BACKUP_DIR` are read from `.env` the way compose reads
+them, so a no-argument drill looks in the directory the backup service really
+writes to.
 
 ## Run locally (dev)
 
