@@ -391,51 +391,59 @@ services' `.env.example` files describe.)
 
 ## Auth
 
-`POST /api/account/auth/login` with `{"username": "admin@pos.local", "password": "admin123"}`
+`POST /api/v1/account/auth/login` with `{"username": "admin@pos.local", "password": "admin123"}`
 (`username` may also be the phone) returns a 24 h JWT. Send it as
 `Authorization: Bearer <token>`. Roles baked into the token: `Admin = 1`,
-`Cashier = 2`; `POST /api/account/auth/switch {"role_id": 2}` re-issues the
-token with a different default role. Route groups `/api/admin/*` and
-`/api/cashier/*` are guarded by role in the global middleware.
+`Cashier = 2`; `POST /api/v1/account/auth/switch {"role_id": 2}` re-issues the
+token with a different default role. Route groups `/api/v1/admin/*` and
+`/api/v1/cashier/*` are guarded by role in the global middleware.
 
 ## API surface
 
-Interactive docs: **http://localhost:3000/swagger** (Swagger UI), raw OpenAPI 3.0.3 JSON at **http://localhost:3000/openapi**. Both are public (no token). In the UI click *Authorize* and paste the `token` returned by `/api/account/auth/login`.
+Interactive docs: **http://localhost:3000/swagger** (Swagger UI), raw OpenAPI 3.0.3 JSON at **http://localhost:3000/openapi**. Both are public (no token). In the UI click *Authorize* and paste the `token` returned by `/api/v1/account/auth/login`.
 
 ```
-GET    /                                health
-POST   /api/account/auth/login          login (public)
-POST   /api/account/auth/switch         switch default role
-GET    /api/account/profile             own profile
-PUT    /api/account/profile/update      update own profile
-PUT    /api/account/profile/update-password
-GET    /api/account/profile/logs        own login history
+GET    /                                    health
+POST   /api/v1/account/auth/login           login (public)
+POST   /api/v1/account/auth/switch          switch default role
+GET    /api/v1/account/profile              own profile
+PUT    /api/v1/account/profile/update       update own profile
+PUT    /api/v1/account/profile/update-password
+GET    /api/v1/account/profile/logs         own login history
 
-GET    /api/admin/dashboard             today/week stats + top products
-GET    /api/admin/types                 list (pagination)      POST create
-GET/PUT/DELETE /api/admin/types/:id
-GET    /api/admin/products              list: page, limit, key, type, creator, startDate, endDate, sort_by, order
-POST   /api/admin/products              create (image = base64 data URL → file service)
-GET    /api/admin/products/setup-data   type/user dropdown refs
-GET/PUT/DELETE /api/admin/products/:id
-GET    /api/admin/sales                 all orders (same filters + user, platform)
-GET    /api/admin/sales/setup-data      cashier dropdown refs
-GET/DELETE /api/admin/sales/:id
-GET    /api/admin/users                 list                    POST create
-GET/PUT/DELETE /api/admin/users/:id
-PUT    /api/admin/users/:id/status      activate/deactivate
-PUT    /api/admin/users/:id/password    reset password
+GET    /api/v1/admin/dashboard              today/week stats + top products
+GET    /api/v1/admin/types                  list (pagination)      POST create
+GET/PUT/DELETE /api/v1/admin/types/:id
+GET    /api/v1/admin/products               list: page, limit, key, type, creator, startDate, endDate, sort_by, order
+POST   /api/v1/admin/products               create (image = base64 data URL → file service)
+GET    /api/v1/admin/products/setup-data    type/user dropdown refs
+GET/PUT/DELETE /api/v1/admin/products/:id
+GET    /api/v1/admin/sales                  all orders (same filters + user, platform)
+GET    /api/v1/admin/sales/setup-data       cashier dropdown refs
+GET/DELETE /api/v1/admin/sales/:id
+GET    /api/v1/admin/users                  list                    POST create
+GET/PUT/DELETE /api/v1/admin/users/:id
+PUT    /api/v1/admin/users/:id/status       activate/deactivate
+PUT    /api/v1/admin/users/:id/password     reset password
 
-GET    /api/cashier/ordering/products   types with nested active products
-POST   /api/cashier/ordering/order      checkout {"cart": "{\"<productId>\": qty}", "platform": "Web"}
-GET    /api/cashier/sales               own sales only
-GET/DELETE /api/cashier/sales/:id
+GET    /api/v1/cashier/ordering/products    types with nested active products
+POST   /api/v1/cashier/ordering/order       checkout {"cart": "{\"<productId>\": qty}", "platform": "Web"}
+GET    /api/v1/cashier/sales                own sales only
+GET/DELETE /api/v1/cashier/sales/:id
 
-GET    /api/reports/invoice/:id        invoice PDF (admin: any order, cashier: own only)
+GET    /api/v1/reports/invoice/:id          invoice PDF (admin: any order, cashier: own only)
 
-GET    /api/testing/basic               public echo endpoint (no auth)
-POST   /api/testing/upload/file         public base64 upload proxy to file service
+GET    /api/v1/testing/basic                public echo endpoint (no auth)
+POST   /api/v1/testing/upload/file          public base64 upload proxy to file service
 ```
+
+The prefix is declared once, in `api/lib/src/config/api_routes.dart`
+(`apiVersionSegment`), and the auth guard keys off it rather than a literal
+`/api/admin`, so a version bump cannot leave a guard that matches nothing.
+`api/test/unit/api_routes_test.dart` fails if the route tree, that prefix and
+the OpenAPI document disagree. The file service is deliberately not
+versioned: `/api/file/*` is an internal compose-network address, not part of
+the public API contract.
 
 File service endpoints (no auth, like v3):
 

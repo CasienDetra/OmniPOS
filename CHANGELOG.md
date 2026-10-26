@@ -49,6 +49,15 @@ disagrees with either service's `pubspec.yaml` or with an entry here.
 
 ### Changed
 
+- **Breaking:** every versioned endpoint moved from `/api/...` to
+  `/api/v1/...`, so clients written against 1.0.0 must change their base path.
+  The prefix now lives in one constant
+  (`api/lib/src/config/api_routes.dart`), the role guards match the segment
+  under that prefix rather than a literal `/api/admin`, and
+  `api/test/unit/api_routes_test.dart` fails if the route tree, those guards
+  and the OpenAPI document disagree. `/healthz`, `/readyz`, `/openapi`,
+  `/swagger` and the file service's `/api/file/*` keep their paths: the first
+  four are infrastructure, the last is internal to the compose network.
 - `MONGO_ROOT_*` and `MONGO_APP_*` are required compose interpolations next
   to `JWT_SECRET`: the stack refuses to start credential-free.
 - Both services receive discrete `MONGO_*` connection variables instead of a

@@ -64,7 +64,7 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/testing/basic"
+              "raw": "{{baseUrl}}/api/v1/testing/basic"
             }
           },
           "event": [
@@ -103,7 +103,7 @@
               "raw": "{\"username\": \"admin@pos.local\", \"password\": \"admin123\", \"platform\": \"Web\"}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/account/auth/login"
+              "raw": "{{baseUrl}}/api/v1/account/auth/login"
             }
           },
           "event": [
@@ -139,7 +139,7 @@
               "raw": "{\"username\": \"cashier@pos.local\", \"password\": \"cashier123\", \"platform\": \"Web\"}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/account/auth/login"
+              "raw": "{{baseUrl}}/api/v1/account/auth/login"
             }
           },
           "event": [
@@ -173,7 +173,7 @@
               "raw": "{\"username\": \"admin@pos.local\", \"password\": \"nope\"}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/account/auth/login"
+              "raw": "{{baseUrl}}/api/v1/account/auth/login"
             }
           },
           "event": [
@@ -197,7 +197,7 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/products"
+              "raw": "{{baseUrl}}/api/v1/admin/products"
             }
           },
           "event": [
@@ -217,7 +217,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/products"
+              "raw": "{{baseUrl}}/api/v1/admin/products"
             }
           },
           "event": [
@@ -262,7 +262,7 @@
               "raw": "{\"name\": \"Postman Demo {{$timestamp}}\"}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/types"
+              "raw": "{{baseUrl}}/api/v1/admin/types"
             }
           },
           "event": [
@@ -293,7 +293,7 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/types?page=1&limit=10",
+              "raw": "{{baseUrl}}/api/v1/admin/types?page=1&limit=10",
               "query": [
                 {
                   "key": "page",
@@ -350,7 +350,7 @@
               "raw": "{\"name\": \"Postman Demo updated\"}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/types/{{typeId}}"
+              "raw": "{{baseUrl}}/api/v1/admin/types/{{typeId}}"
             }
           },
           "event": [
@@ -396,7 +396,7 @@
               "raw": "{\"name\": \"Postman Latte\", \"code\": \"PM{{$timestamp}}\", \"type\": \"{{typeId}}\", \"unit_price\": 4500}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/products"
+              "raw": "{{baseUrl}}/api/v1/admin/products"
             }
           },
           "event": [
@@ -427,7 +427,7 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/products?page=1&limit=10",
+              "raw": "{{baseUrl}}/api/v1/admin/products?page=1&limit=10",
               "query": [
                 {
                   "key": "page",
@@ -468,7 +468,7 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/products/{{productId}}"
+              "raw": "{{baseUrl}}/api/v1/admin/products/{{productId}}"
             }
           },
           "event": [
@@ -508,7 +508,7 @@
               "raw": "{\"unit_price\": 5000}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/products/{{productId}}"
+              "raw": "{{baseUrl}}/api/v1/admin/products/{{productId}}"
             }
           },
           "event": [
@@ -539,7 +539,7 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/products/setup-data"
+              "raw": "{{baseUrl}}/api/v1/admin/products/setup-data"
             }
           },
           "event": [
@@ -564,7 +564,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/cashier/ordering/products"
+              "raw": "{{baseUrl}}/api/v1/cashier/ordering/products"
             }
           },
           "event": [
@@ -595,7 +595,7 @@
               "raw": "{\"cart\": \"{\\\"{{productId}}\\\": 2}\", \"platform\": \"Web\"}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/cashier/ordering/order"
+              "raw": "{{baseUrl}}/api/v1/cashier/ordering/order"
             }
           },
           "event": [
@@ -631,7 +631,7 @@
               "raw": "{\"cart\": \"{}\", \"platform\": \"Web\"}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/cashier/ordering/order"
+              "raw": "{{baseUrl}}/api/v1/cashier/ordering/order"
             }
           },
           "event": [
@@ -651,7 +651,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/cashier/sales?page=1&limit=10",
+              "raw": "{{baseUrl}}/api/v1/cashier/sales?page=1&limit=10",
               "query": [
                 {
                   "key": "page",
@@ -682,7 +682,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/cashier/sales/{{orderOwnId}}"
+              "raw": "{{baseUrl}}/api/v1/cashier/sales/{{orderOwnId}}"
             }
           },
           "event": [
@@ -718,7 +718,7 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/sales?page=1&limit=5",
+              "raw": "{{baseUrl}}/api/v1/admin/sales?page=1&limit=5",
               "query": [
                 {
                   "key": "page",
@@ -759,7 +759,7 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/sales/setup-data"
+              "raw": "{{baseUrl}}/api/v1/admin/sales/setup-data"
             }
           },
           "event": [
@@ -789,7 +789,7 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/dashboard"
+              "raw": "{{baseUrl}}/api/v1/admin/dashboard"
             }
           },
           "event": [
@@ -814,7 +814,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/reports/invoice/{{orderOwnId}}"
+              "raw": "{{baseUrl}}/api/v1/reports/invoice/{{orderOwnId}}"
             },
             "description": "Use 'Send and Download' to save the PDF, then open it — Khmer headers must be shaped correctly."
           },
@@ -836,7 +836,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/reports/invoice/000000000000000000000000"
+              "raw": "{{baseUrl}}/api/v1/reports/invoice/000000000000000000000000"
             }
           },
           "event": [
@@ -881,7 +881,7 @@
               "raw": "{\"name\": \"Postman Cashier\", \"phone\": \"09{{$timestamp}}\", \"email\": \"postman-{{$timestamp}}@pos.local\", \"password\": \"test1234\", \"roles\": [2]}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/users"
+              "raw": "{{baseUrl}}/api/v1/admin/users"
             }
           },
           "event": [
@@ -913,7 +913,7 @@
             },
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/users?page=1&limit=10",
+              "raw": "{{baseUrl}}/api/v1/admin/users?page=1&limit=10",
               "query": [
                 {
                   "key": "page",
@@ -963,7 +963,7 @@
               "raw": "{\"is_active\": false}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/users/{{testUserId}}/status"
+              "raw": "{{baseUrl}}/api/v1/admin/users/{{testUserId}}/status"
             }
           },
           "event": [
@@ -996,7 +996,7 @@
               "raw": "{\"username\": \"{{testEmail}}\", \"password\": \"test1234\"}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/account/auth/login"
+              "raw": "{{baseUrl}}/api/v1/account/auth/login"
             }
           },
           "event": [
@@ -1021,7 +1021,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/account/profile"
+              "raw": "{{baseUrl}}/api/v1/account/profile"
             }
           },
           "event": [
@@ -1042,7 +1042,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/api/account/profile/logs"
+              "raw": "{{baseUrl}}/api/v1/account/profile/logs"
             }
           },
           "event": [
@@ -1078,7 +1078,7 @@
             },
             "method": "DELETE",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/sales/{{orderOwnId}}"
+              "raw": "{{baseUrl}}/api/v1/admin/sales/{{orderOwnId}}"
             }
           },
           "event": [
@@ -1108,7 +1108,7 @@
             },
             "method": "DELETE",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/products/{{productId}}"
+              "raw": "{{baseUrl}}/api/v1/admin/products/{{productId}}"
             }
           },
           "event": [
@@ -1138,7 +1138,7 @@
             },
             "method": "DELETE",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/types/{{typeId}}"
+              "raw": "{{baseUrl}}/api/v1/admin/types/{{typeId}}"
             }
           },
           "event": [
@@ -1168,7 +1168,7 @@
             },
             "method": "DELETE",
             "url": {
-              "raw": "{{baseUrl}}/api/admin/users/{{testUserId}}"
+              "raw": "{{baseUrl}}/api/v1/admin/users/{{testUserId}}"
             }
           },
           "event": [

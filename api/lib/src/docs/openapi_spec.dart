@@ -6,7 +6,7 @@ const openApiSpecJson = r'''
   "info": {
     "title": "POS API",
     "version": "1.0.0",
-    "description": "Point-of-sale backend (Dart Frog + MongoDB). All responses use the envelope {\"success\": true, \"status_code\": n, \"data\": ...} or {\"success\": false, \"error\": \"...\"}. Authenticate via POST /api/account/auth/login, then send the returned token as \"Authorization: Bearer <token>\". Role 1 = Admin (guards /api/admin/*), role 2 = Cashier (guards /api/cashier/*)."
+    "description": "Point-of-sale backend (Dart Frog + MongoDB). All responses use the envelope {\"success\": true, \"status_code\": n, \"data\": ...} or {\"success\": false, \"error\": \"...\"}. Authenticate via POST /api/v1/account/auth/login, then send the returned token as \"Authorization: Bearer <token>\". Role 1 = Admin (guards /api/v1/admin/*), role 2 = Cashier (guards /api/v1/cashier/*)."
   },
   "servers": [
     {
@@ -151,7 +151,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/account/auth/login": {
+    "/api/v1/account/auth/login": {
       "post": {
         "tags": [
           "Auth"
@@ -203,7 +203,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/account/auth/switch": {
+    "/api/v1/account/auth/switch": {
       "post": {
         "tags": [
           "Auth"
@@ -261,7 +261,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/account/profile": {
+    "/api/v1/account/profile": {
       "get": {
         "tags": [
           "Profile"
@@ -293,7 +293,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/account/profile/update": {
+    "/api/v1/account/profile/update": {
       "put": {
         "tags": [
           "Profile"
@@ -349,7 +349,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/account/profile/update-password": {
+    "/api/v1/account/profile/update-password": {
       "put": {
         "tags": [
           "Profile"
@@ -394,7 +394,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/account/profile/logs": {
+    "/api/v1/account/profile/logs": {
       "get": {
         "tags": [
           "Profile"
@@ -449,7 +449,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/cashier/ordering/products": {
+    "/api/v1/cashier/ordering/products": {
       "get": {
         "tags": [
           "Cashier"
@@ -499,7 +499,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/cashier/ordering/order": {
+    "/api/v1/cashier/ordering/order": {
       "post": {
         "tags": [
           "Cashier"
@@ -577,7 +577,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/cashier/sales": {
+    "/api/v1/cashier/sales": {
       "get": {
         "tags": [
           "Cashier"
@@ -641,7 +641,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/cashier/sales/{id}": {
+    "/api/v1/cashier/sales/{id}": {
       "get": {
         "tags": [
           "Cashier"
@@ -710,7 +710,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/reports/invoice/{id}": {
+    "/api/v1/reports/invoice/{id}": {
       "get": {
         "tags": [
           "Reports"
@@ -743,7 +743,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/products": {
+    "/api/v1/admin/products": {
       "get": {
         "tags": [
           "Admin / Products"
@@ -866,7 +866,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/products/{id}": {
+    "/api/v1/admin/products/{id}": {
       "get": {
         "tags": [
           "Admin / Products"
@@ -980,7 +980,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/products/setup-data": {
+    "/api/v1/admin/products/setup-data": {
       "get": {
         "tags": [
           "Admin / Products"
@@ -1000,7 +1000,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/types": {
+    "/api/v1/admin/types": {
       "get": {
         "tags": [
           "Admin / Types"
@@ -1101,7 +1101,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/types/{id}": {
+    "/api/v1/admin/types/{id}": {
       "get": {
         "tags": [
           "Admin / Types"
@@ -1211,7 +1211,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/sales": {
+    "/api/v1/admin/sales": {
       "get": {
         "tags": [
           "Admin / Sales"
@@ -1283,7 +1283,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/sales/{id}": {
+    "/api/v1/admin/sales/{id}": {
       "get": {
         "tags": [
           "Admin / Sales"
@@ -1349,7 +1349,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/sales/setup-data": {
+    "/api/v1/admin/sales/setup-data": {
       "get": {
         "tags": [
           "Admin / Sales"
@@ -1369,7 +1369,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/users": {
+    "/api/v1/admin/users": {
       "get": {
         "tags": [
           "Admin / Users"
@@ -1500,7 +1500,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/users/{id}": {
+    "/api/v1/admin/users/{id}": {
       "get": {
         "tags": [
           "Admin / Users"
@@ -1635,7 +1635,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/users/{id}/status": {
+    "/api/v1/admin/users/{id}/status": {
       "put": {
         "tags": [
           "Admin / Users"
@@ -1693,7 +1693,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/users/{id}/password": {
+    "/api/v1/admin/users/{id}/password": {
       "put": {
         "tags": [
           "Admin / Users"
@@ -1740,7 +1740,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/admin/dashboard": {
+    "/api/v1/admin/dashboard": {
       "get": {
         "tags": [
           "Admin / Dashboard"
@@ -1760,7 +1760,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/testing/basic": {
+    "/api/v1/testing/basic": {
       "get": {
         "tags": [
           "Testing"
@@ -1781,7 +1781,7 @@ const openApiSpecJson = r'''
         }
       }
     },
-    "/api/testing/upload/file": {
+    "/api/v1/testing/upload/file": {
       "post": {
         "tags": [
           "Testing"
@@ -2063,7 +2063,7 @@ const openApiSpecJson = r'''
           },
           "path": {
             "type": "string",
-            "example": "/api/admin/products"
+            "example": "/api/v1/admin/products"
           }
         }
       },

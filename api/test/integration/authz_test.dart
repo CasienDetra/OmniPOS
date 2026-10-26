@@ -40,7 +40,7 @@ Map<String, dynamic> jsonOf(http.Response res) =>
 Future<String> login(String username, String password) async {
   final res = await call(
     'POST',
-    '/api/account/auth/login',
+    '/api/v1/account/auth/login',
     body: {'username': username, 'password': password},
   );
   if (res.statusCode != 200) {
@@ -56,7 +56,7 @@ Future<String?> probeServer() async {
   try {
     final probe = await call(
       'GET',
-      '/api/testing/basic',
+      '/api/v1/testing/basic',
     ).timeout(const Duration(seconds: 3));
     if (probe.statusCode != 200) {
       return 'POS api answered ${probe.statusCode} at $base';
@@ -84,12 +84,12 @@ Future<void> main() async {
   tearDownAll(() async {
     if (adminToken.isEmpty) return;
     for (final id in placedOrderIds) {
-      await call('DELETE', '/api/admin/sales/$id', token: adminToken);
+      await call('DELETE', '/api/v1/admin/sales/$id', token: adminToken);
     }
     if (tempCashierId != null) {
       await call(
         'DELETE',
-        '/api/admin/users/$tempCashierId',
+        '/api/v1/admin/users/$tempCashierId',
         token: adminToken,
       );
     }
@@ -97,20 +97,20 @@ Future<void> main() async {
 
   group('auth guard', () {
     test('public testing endpoint needs no token', () async {
-      final res = await call('GET', '/api/testing/basic');
+      final res = await call('GET', '/api/v1/testing/basic');
       expect(res.statusCode, 200);
       expect(jsonOf(res)['success'], isTrue);
     });
 
     test('protected endpoint without token is 401', () async {
-      final res = await call('GET', '/api/admin/products');
+      final res = await call('GET', '/api/v1/admin/products');
       expect(res.statusCode, 401);
     });
 
     test('malformed Authorization header is 401', () async {
       final request = http.Request(
         'GET',
-        base.replace(path: '/api/admin/products'),
+        base.replace(path: '/api/v1/admin/products'),
       )..headers['authorization'] = 'Token abc';
       final res = await http.Response.fromStream(await request.send());
       expect(res.statusCode, 401);
@@ -119,7 +119,7 @@ Future<void> main() async {
     test('garbage token is 401', () async {
       final res = await call(
         'GET',
-        '/api/admin/products',
+        '/api/v1/admin/products',
         token: 'abc.def.ghi',
       );
       expect(res.statusCode, 401);
@@ -128,7 +128,7 @@ Future<void> main() async {
     test('wrong password is 401 with generic message', () async {
       final res = await call(
         'POST',
-        '/api/account/auth/login',
+        '/api/v1/account/auth/login',
         body: {'username': 'admin@pos.local', 'password': 'nope'},
       );
       expect(res.statusCode, 401);
@@ -136,14 +136,18 @@ Future<void> main() async {
     });
 
     test('cashier is 403 on admin paths', () async {
-      final res = await call('GET', '/api/admin/products', token: cashierToken);
+      final res = await call(
+        'GET',
+        '/api/v1/admin/products',
+        token: cashierToken,
+      );
       expect(res.statusCode, 403);
     });
 
     test('admin is 403 on cashier paths', () async {
       final res = await call(
         'GET',
-        '/api/cashier/ordering/products',
+        '/api/v1/cashier/ordering/products',
         token: adminToken,
       );
       expect(res.statusCode, 403);
@@ -152,7 +156,11 @@ Future<void> main() async {
 
   group('catalogue reads', () {
     test('admin lists products with pagination envelope', () async {
-      final res = await call('GET', '/api/admin/products', token: adminToken);
+      final res = await call(
+        'GET',
+        '/api/v1/admin/products',
+        token: adminToken,
+      );
       expect(res.statusCode, 200);
       final body = jsonOf(res);
       expect(body['data'], isA<List<dynamic>>());
@@ -163,7 +171,7 @@ Future<void> main() async {
     test('cashier sees types with nested active products', () async {
       final res = await call(
         'GET',
-        '/api/cashier/ordering/products',
+        '/api/v1/cashier/ordering/products',
         token: cashierToken,
       );
       expect(res.statusCode, 200);
@@ -181,7 +189,7 @@ Future<void> main() async {
     test('missing cart is 422', () async {
       final res = await call(
         'POST',
-        '/api/cashier/ordering/order',
+        '/api/v1/cashier/ordering/order',
         token: cashierToken,
         body: {'platform': 'Web'},
       );
@@ -191,7 +199,7 @@ Future<void> main() async {
     test('empty cart is 422', () async {
       final res = await call(
         'POST',
-        '/api/cashier/ordering/order',
+        '/api/v1/cashier/ordering/order',
         token: cashierToken,
         body: {'cart': '{}', 'platform': 'Web'},
       );
@@ -201,7 +209,7 @@ Future<void> main() async {
     test('non-positive qty is 422', () async {
       final res = await call(
         'POST',
-        '/api/cashier/ordering/order',
+        '/api/v1/cashier/ordering/order',
         token: cashierToken,
         body: {'cart': '{"000000000000000000000001": 0}', 'platform': 'Web'},
       );
@@ -211,7 +219,7 @@ Future<void> main() async {
     test('malformed cart string is 422', () async {
       final res = await call(
         'POST',
-        '/api/cashier/ordering/order',
+        '/api/v1/cashier/ordering/order',
         token: cashierToken,
         body: {'cart': 'not json', 'platform': 'Web'},
       );
@@ -221,7 +229,7 @@ Future<void> main() async {
     test('unknown product is 404', () async {
       final res = await call(
         'POST',
-        '/api/cashier/ordering/order',
+        '/api/v1/cashier/ordering/order',
         token: cashierToken,
         body: {'cart': '{"0000000000000000000000ff": 1}', 'platform': 'Web'},
       );
@@ -231,7 +239,7 @@ Future<void> main() async {
     test('malformed product id is 404', () async {
       final res = await call(
         'POST',
-        '/api/cashier/ordering/order',
+        '/api/v1/cashier/ordering/order',
         token: cashierToken,
         body: {'cart': '{"nope": 1}', 'platform': 'Web'},
       );
@@ -246,7 +254,7 @@ Future<void> main() async {
     test('cashier places an order', () async {
       final listing = await call(
         'GET',
-        '/api/cashier/ordering/products',
+        '/api/v1/cashier/ordering/products',
         token: cashierToken,
       );
       final types = (jsonOf(listing)['data'] as List)
@@ -262,7 +270,7 @@ Future<void> main() async {
 
       final res = await call(
         'POST',
-        '/api/cashier/ordering/order',
+        '/api/v1/cashier/ordering/order',
         token: cashierToken,
         body: {'cart': '{"${product['id']}": 2}', 'platform': 'Web'},
       );
@@ -283,7 +291,7 @@ Future<void> main() async {
     test('receipt numbers increment sequentially', () async {
       final listing = await call(
         'GET',
-        '/api/cashier/ordering/products',
+        '/api/v1/cashier/ordering/products',
         token: cashierToken,
       );
       final types = (jsonOf(listing)['data'] as List)
@@ -297,7 +305,7 @@ Future<void> main() async {
               .first;
       final res = await call(
         'POST',
-        '/api/cashier/ordering/order',
+        '/api/v1/cashier/ordering/order',
         token: cashierToken,
         body: {'cart': '{"${product['id']}": 1}', 'platform': 'Web'},
       );
@@ -312,7 +320,7 @@ Future<void> main() async {
     test('cashier reads own order detail', () async {
       final res = await call(
         'GET',
-        '/api/cashier/sales/$firstOrderId',
+        '/api/v1/cashier/sales/$firstOrderId',
         token: cashierToken,
       );
       expect(res.statusCode, 200);
@@ -322,7 +330,7 @@ Future<void> main() async {
     test('invoice PDF renders for the owning cashier', () async {
       final res = await call(
         'GET',
-        '/api/reports/invoice/$firstOrderId',
+        '/api/v1/reports/invoice/$firstOrderId',
         token: cashierToken,
       );
       expect(res.statusCode, 200);
@@ -331,7 +339,7 @@ Future<void> main() async {
     });
 
     test('invoice without token is 401', () async {
-      final res = await call('GET', '/api/reports/invoice/$firstOrderId');
+      final res = await call('GET', '/api/v1/reports/invoice/$firstOrderId');
       expect(res.statusCode, 401);
     });
 
@@ -339,7 +347,7 @@ Future<void> main() async {
       final stamp = DateTime.now().microsecondsSinceEpoch;
       final created = await call(
         'POST',
-        '/api/admin/users',
+        '/api/v1/admin/users',
         token: adminToken,
         body: {
           'name': 'zz-test cashier',
@@ -355,14 +363,14 @@ Future<void> main() async {
 
       final detail = await call(
         'GET',
-        '/api/cashier/sales/$firstOrderId',
+        '/api/v1/cashier/sales/$firstOrderId',
         token: tempCashierToken,
       );
       expect(detail.statusCode, 403);
 
       final invoice = await call(
         'GET',
-        '/api/reports/invoice/$firstOrderId',
+        '/api/v1/reports/invoice/$firstOrderId',
         token: tempCashierToken,
       );
       expect(invoice.statusCode, 403);
@@ -371,7 +379,7 @@ Future<void> main() async {
     test('invoice for a well-formed unknown id is 404', () async {
       final res = await call(
         'GET',
-        '/api/reports/invoice/000000000000000000000000',
+        '/api/v1/reports/invoice/000000000000000000000000',
         token: adminToken,
       );
       expect(res.statusCode, 404);
@@ -380,7 +388,7 @@ Future<void> main() async {
     test('cashier cannot delete another cashier order', () async {
       final res = await call(
         'DELETE',
-        '/api/cashier/sales/$firstOrderId',
+        '/api/v1/cashier/sales/$firstOrderId',
         token: tempCashierToken,
       );
       expect(res.statusCode, 403);
@@ -390,7 +398,7 @@ Future<void> main() async {
       for (final id in placedOrderIds.toList()) {
         final res = await call(
           'DELETE',
-          '/api/admin/sales/$id',
+          '/api/v1/admin/sales/$id',
           token: adminToken,
         );
         expect(res.statusCode, 200, reason: 'delete $id failed: ${res.body}');
@@ -398,7 +406,7 @@ Future<void> main() async {
       }
       final gone = await call(
         'GET',
-        '/api/admin/sales/$firstOrderId',
+        '/api/v1/admin/sales/$firstOrderId',
         token: adminToken,
       );
       expect(gone.statusCode, 404);

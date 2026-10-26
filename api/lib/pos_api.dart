@@ -1,3 +1,4 @@
+export 'src/config/api_routes.dart';
 export 'src/config/app_config.dart';
 export 'src/core/auth.dart';
 export 'src/core/exceptions.dart';

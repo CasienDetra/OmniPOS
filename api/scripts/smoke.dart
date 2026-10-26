@@ -36,7 +36,7 @@ Future<void> main(List<String> argv) async {
   await step(
     target,
     'GET',
-    '/api/testing/basic',
+    '/api/v1/testing/basic',
     label: 'health: public testing endpoint',
     expectStatus: 200,
     check: (json) => json?['success'] == true,
@@ -45,7 +45,7 @@ Future<void> main(List<String> argv) async {
   final admin = await step(
     target,
     'POST',
-    '/api/account/auth/login',
+    '/api/v1/account/auth/login',
     label: 'login admin',
     body: const {'username': 'admin@pos.local', 'password': 'admin123'},
     expectStatus: 200,
@@ -56,7 +56,7 @@ Future<void> main(List<String> argv) async {
   final cashier = await step(
     target,
     'POST',
-    '/api/account/auth/login',
+    '/api/v1/account/auth/login',
     label: 'login cashier',
     body: const {'username': 'cashier@pos.local', 'password': 'cashier123'},
     expectStatus: 200,
@@ -67,7 +67,7 @@ Future<void> main(List<String> argv) async {
   await step(
     target,
     'GET',
-    '/api/admin/products',
+    '/api/v1/admin/products',
     label: 'authz: cashier on admin route is 403',
     token: cashierToken,
     expectStatus: 403,
@@ -75,7 +75,7 @@ Future<void> main(List<String> argv) async {
   await step(
     target,
     'GET',
-    '/api/admin/products',
+    '/api/v1/admin/products',
     label: 'authz: no token is 401',
     expectStatus: 401,
   );
@@ -83,7 +83,7 @@ Future<void> main(List<String> argv) async {
   final listing = await step(
     target,
     'GET',
-    '/api/cashier/ordering/products',
+    '/api/v1/cashier/ordering/products',
     label: 'cashier ordering products',
     token: cashierToken,
     expectStatus: 200,
@@ -102,7 +102,7 @@ Future<void> main(List<String> argv) async {
   final order = await step(
     target,
     'POST',
-    '/api/cashier/ordering/order',
+    '/api/v1/cashier/ordering/order',
     label: 'place order (2 x ${product['name']})',
     token: cashierToken,
     body: {
@@ -123,7 +123,7 @@ Future<void> main(List<String> argv) async {
   await step(
     target,
     'GET',
-    '/api/cashier/sales?page=1&limit=50',
+    '/api/v1/cashier/sales?page=1&limit=50',
     label: 'my sales includes new order',
     token: cashierToken,
     expectStatus: 200,
@@ -134,7 +134,7 @@ Future<void> main(List<String> argv) async {
   await step(
     target,
     'GET',
-    '/api/cashier/sales/$orderId',
+    '/api/v1/cashier/sales/$orderId',
     label: 'sale detail',
     token: cashierToken,
     expectStatus: 200,
@@ -143,7 +143,7 @@ Future<void> main(List<String> argv) async {
   await step(
     target,
     'GET',
-    '/api/reports/invoice/$orderId',
+    '/api/v1/reports/invoice/$orderId',
     label: 'invoice PDF (own order)',
     token: cashierToken,
     expectStatus: 200,
@@ -153,7 +153,7 @@ Future<void> main(List<String> argv) async {
   await step(
     target,
     'GET',
-    '/api/reports/invoice/000000000000000000000000',
+    '/api/v1/reports/invoice/000000000000000000000000',
     label: 'invoice 404 for unknown id',
     token: adminToken,
     expectStatus: 404,
@@ -162,7 +162,7 @@ Future<void> main(List<String> argv) async {
   await step(
     target,
     'DELETE',
-    '/api/admin/sales/$orderId',
+    '/api/v1/admin/sales/$orderId',
     label: 'cleanup: admin deletes test order',
     token: adminToken,
     expectStatus: 200,
