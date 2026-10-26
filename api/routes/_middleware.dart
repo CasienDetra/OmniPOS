@@ -9,7 +9,6 @@ import 'package:pos_api/pos_api.dart';
 /// are the only paths that work without a bearer token. Readiness must stay
 /// unauthenticated or an orchestrator can never observe it.
 const _publicPaths = {'/', '/healthz', '/readyz', '/openapi', '/swagger'};
-const _publicPrefixes = ['/api/account/auth/login', '/api/testing'];
 
 /// Global error boundary (v4 ExceptionErrorsFilter) wrapping the auth guard,
 /// so 401/403 raised during authentication also get the JSON envelope.
@@ -52,7 +51,7 @@ Handler _authGuard(Handler handler) {
     final path = '/${context.request.url.path}';
     final isPublic =
         _publicPaths.contains(path) ||
-        _publicPrefixes.any(
+        publicApiPrefixes.any(
           (prefix) => path == prefix || path.startsWith('$prefix/'),
         );
 
@@ -72,10 +71,17 @@ Handler _authGuard(Handler handler) {
     }
 
     if (auth != null) {
-      if (path.startsWith('/api/admin') && !auth.hasRole(Role.admin)) {
+      // Match on the first segment under the version prefix instead of a
+      // literal "/api/admin", so bumping the version can never leave a guard
+      // that silently matches nothing. The segment names are the route
+      // directory names; api_routes_test.dart pins them.
+      final section = path.startsWith('$apiPrefix/')
+          ? path.substring(apiPrefix.length + 1).split('/').first
+          : null;
+      if (section == adminSection && !auth.hasRole(Role.admin)) {
         throw const ForbiddenException('Requires Admin role');
       }
-      if (path.startsWith('/api/cashier') && !auth.hasRole(Role.cashier)) {
+      if (section == cashierSection && !auth.hasRole(Role.cashier)) {
         throw const ForbiddenException('Requires Cashier role');
       }
       return handler(context.provide<AuthUser>(() => auth!));
