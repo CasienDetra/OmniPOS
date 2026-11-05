@@ -27,5 +27,21 @@ const String loginPath = '$apiPrefix/account/auth/login';
 /// Development-only endpoints that stay reachable without a token.
 const String testingPrefix = '$apiPrefix/testing';
 
+/// First path segment for payment endpoints. Unlike the two role sections it
+/// belongs to neither Admin nor Cashier: the path holds the gateway's
+/// notification endpoint, which arrives from a payments company and can never
+/// carry our token.
+const String paymentsSection = 'payments';
+
+const String paymentsPrefix = '$apiPrefix/$paymentsSection';
+
+/// Where the payment gateway posts "this QR has been paid", and the one route
+/// that answers without a bearer token.
+const String paymentCallbackPath = '$paymentsPrefix/callback';
+
 /// Path prefixes that do not require a bearer token.
-const List<String> publicApiPrefixes = [loginPath, testingPrefix];
+const List<String> publicApiPrefixes = [
+  loginPath,
+  testingPrefix,
+  paymentCallbackPath,
+];

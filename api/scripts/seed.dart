@@ -76,6 +76,35 @@ Future<void> _createIndexes(Db db) async {
       'key': {'cashier_id': 1, 'ordered_at': -1},
       'name': 'cashier_date',
     },
+    // The guard against one paid QR producing two Sales. Partial, because a
+    // cash Sale has no transaction id and several of them must be allowed to
+    // exist with the field absent; `$type: 'string'` indexes only the rows
+    // that actually carry one.
+    {
+      'key': {'payment_tran_id': 1},
+      'name': 'payment_tran_unique',
+      'unique': true,
+      'partialFilterExpression': {
+        'payment_tran_id': {r'$type': 'string'},
+      },
+    },
+  ]);
+  await ensure('payments', [
+    {
+      'key': {'tran_id': 1},
+      'name': 'tran_unique',
+      'unique': true,
+    },
+    {
+      'key': {'cashier_id': 1, 'created_at': -1},
+      'name': 'cashier_created',
+    },
+    {
+      // So "is anything still awaiting a customer?" is an index scan rather
+      // than a collection scan, on a terminal that asks every few seconds.
+      'key': {'status': 1, 'expires_at': 1},
+      'name': 'status_expiry',
+    },
   ]);
   await ensure('user_logs', [
     {

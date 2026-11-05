@@ -88,6 +88,38 @@ services:
       # No default on purpose: a placeholder secret would sign every token.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set it}
       FILE_BASE_URL: http://file:8080
+      # QR payments. One gateway drives the payment routes at a time, so both
+      # blocks are passed through and PAYMENT_PROVIDER decides which is used.
+      # All optional: with no credentials the service still starts and the
+      # payment routes answer 503, which is the state a development machine and
+      # CI are in.
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-cutluy}
+      # CutLuy (https://cutluy.com) takes KHQR payments in USD and signs its
+      # notifications. A KHR shop also needs CUTLUY_KHR_USD_RATE, because its
+      # cart is converted before a code is asked for; without a rate the
+      # service declines to charge money it would have to invent.
+      CUTLUY_BASE_URL: ${CUTLUY_BASE_URL:-https://cutluy.com}
+      CUTLUY_API_KEY: ${CUTLUY_API_KEY:-}
+      # The endpoint secret CutLuy signs deliveries with. Empty means the
+      # callback refuses everything, and the till's own polling closes sales.
+      CUTLUY_WEBHOOK_SECRET: ${CUTLUY_WEBHOOK_SECRET:-}
+      CUTLUY_WEBHOOK_TOLERANCE_SECONDS: ${CUTLUY_WEBHOOK_TOLERANCE_SECONDS:-300}
+      CUTLUY_SHOP_CURRENCY: ${CUTLUY_SHOP_CURRENCY:-KHR}
+      CUTLUY_KHR_USD_RATE: ${CUTLUY_KHR_USD_RATE:-}
+      CUTLUY_FALLBACK_EXPIRY_SECONDS: ${CUTLUY_FALLBACK_EXPIRY_SECONDS:-300}
+      # ABA PayWay (https://developer.payway.com.kh). Selected by
+      # PAYMENT_PROVIDER=payway; it needs its own merchant id and key and
+      # whitelists the address it is called from.
+      PAYWAY_BASE_URL: ${PAYWAY_BASE_URL:-https://checkout-sandbox.payway.com.kh}
+      PAYWAY_MERCHANT_ID: ${PAYWAY_MERCHANT_ID:-}
+      PAYWAY_API_KEY: ${PAYWAY_API_KEY:-}
+      PAYWAY_CURRENCY: ${PAYWAY_CURRENCY:-KHR}
+      PAYWAY_QR_LIFETIME_MINUTES: ${PAYWAY_QR_LIFETIME_MINUTES:-10}
+      # Where PayWay posts "this QR was paid". It must be an address PayWay's
+      # servers can reach, so it is a deploy-time value rather than a compose
+      # network name; left empty the api polls the gateway instead.
+      PAYWAY_CALLBACK_URL: ${PAYWAY_CALLBACK_URL:-}
+      PAYWAY_QR_IMAGE_TEMPLATE: ${PAYWAY_QR_IMAGE_TEMPLATE:-}
     depends_on:
       mongo:
         condition: service_healthy

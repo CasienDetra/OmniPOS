@@ -6,7 +6,7 @@ const openApiSpecJson = r'''
   "info": {
     "title": "POS API",
     "version": "1.0.0",
-    "description": "Point-of-sale backend (Dart Frog + MongoDB). All responses use the envelope {\"success\": true, \"status_code\": n, \"data\": ...} or {\"success\": false, \"error\": \"...\"}. Authenticate via POST /api/v1/account/auth/login, then send the returned token as \"Authorization: Bearer <token>\". Role 1 = Admin (guards /api/v1/admin/*), role 2 = Cashier (guards /api/v1/cashier/*)."
+    "description": "Point-of-sale backend (Dart Frog + MongoDB). All responses use the envelope {\"success\": true, \"status_code\": n, \"data\": ...} or {\"success\": false, \"error\": \"...\"}. Authenticate via POST /api/v1/account/auth/login, then send the returned token as \"Authorization: Bearer <token>\". Role 1 = Admin (guards /api/v1/admin/*), role 2 = Cashier (guards /api/v1/cashier/*). QR payments go through CutLuy or ABA PayWay, chosen by the PAYMENT_PROVIDER setting; /api/v1/payments/callback is the one route that is public because the gateway posts to it."
   },
   "servers": [
     {
@@ -26,6 +26,9 @@ const openApiSpecJson = r'''
     },
     {
       "name": "Cashier"
+    },
+    {
+      "name": "Payments"
     },
     {
       "name": "Admin / Products"
@@ -577,6 +580,247 @@ const openApiSpecJson = r'''
         }
       }
     },
+    "/api/v1/cashier/payments": {
+      "post": {
+        "tags": [
+          "Cashier"
+        ],
+        "summary": "Show a QR code for a cart",
+        "description": "Asks PayWay to generate a KHQR for the cart and records a pending payment. No sale and no receipt number exist yet: those appear only when PayWay confirms the payment, so an abandoned QR leaves no gap in the receipt sequence.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "cart"
+                ],
+                "properties": {
+                  "cart": {
+                    "description": "Mapping of product id to quantity, either a JSON string or an object",
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "example": "{\"64f1a0000000000000000001\": 2}"
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "integer"
+                        },
+                        "example": {
+                          "64f1a0000000000000000001": 2
+                        }
+                      }
+                    ]
+                  },
+                  "platform": {
+                    "type": "string",
+                    "default": "Web"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "QR generated; payment pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SuccessEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/Payment"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidEntity"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/cashier/payments/{tranId}": {
+      "get": {
+        "tags": [
+          "Cashier"
+        ],
+        "summary": "Refresh a payment from the gateway",
+        "description": "Asks the configured gateway — CutLuy or PayWay — what became of the transaction and returns the stored result. A payment that turns out to be approved produces the sale at this point. A cashier only sees their own payments.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TranIdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current state of the payment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SuccessEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/Payment"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/cashier/payments/{tranId}/qr": {
+      "get": {
+        "tags": [
+          "Cashier"
+        ],
+        "summary": "The payment's QR code drawn as an image",
+        "description": "Renders payment.qr_string — the raw KHQR payload — at error correction level H, which is what lets a till put a logo or a riel medallion over the centre of the code without breaking the scan. Nothing is asked of the gateway and no customer is sent to a hosted checkout page: the image is drawn here from the payload this service already holds, so a screen refresh costs no API call. Once a payment leaves pending its code is gone for good, and the answer is 410 rather than a picture of a code that can no longer be paid. The SVG carries module geometry only — the payload text is never written into the markup.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TranIdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The QR code for this payment, as SVG",
+            "content": {
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "410": {
+            "description": "The payment is paid, expired or refused, so its code is no longer drawn"
+          }
+        }
+      }
+    },
+    "/api/v1/payments/callback": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "security": [],
+        "summary": "Payment notification from the gateway",
+        "description": "Public by necessity: the payments company posts here and cannot carry a cashier token. The body is verified as the bytes that arrived — CutLuy signs an HMAC over \"t.rawBody\", and a signature computed over re-serialised JSON never matches — and what the delivery claims about money is never believed: the transaction is re-read through the authenticated gateway API before a sale is written. The response goes out before that re-read, because a gateway that does not get a 2xx retries the delivery up to eight times.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/CutLuyEvent"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PaywayNotification"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/Accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CutLuy-Signature",
+            "in": "header",
+            "required": false,
+            "description": "t=<unix>,v1=<hex>. Required when PAYMENT_PROVIDER is cutluy: a delivery that does not verify is refused.",
+            "schema": {
+              "type": "string",
+              "example": "t=1720526591,v1=3f2a"
+            }
+          },
+          {
+            "name": "X-CutLuy-Event",
+            "in": "header",
+            "required": false,
+            "description": "Event name. payment.completed means the customer paid; it is a reason to look, not proof.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "payment.completed",
+                "payment.scanned",
+                "payment.expired",
+                "payment.failed"
+              ]
+            }
+          }
+        ]
+      }
+    },
     "/api/v1/cashier/sales": {
       "get": {
         "tags": [
@@ -976,6 +1220,54 @@ const openApiSpecJson = r'''
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/products/low-stock": {
+      "get": {
+        "tags": [
+          "Admin / Products"
+        ],
+        "summary": "Products at or below their stock warning line",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Low-stock products, emptiest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/SuccessEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "products": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/components/schemas/Product"
+                              }
+                            },
+                            "total": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -1866,6 +2158,16 @@ const openApiSpecJson = r'''
           "example": "64f1a0000000000000000001"
         }
       },
+      "TranIdPath": {
+        "name": "tranId",
+        "in": "path",
+        "required": true,
+        "description": "Payment transaction id issued by this POS (at most 20 characters)",
+        "schema": {
+          "type": "string",
+          "example": "2603121000001"
+        }
+      },
       "Page": {
         "name": "page",
         "in": "query",
@@ -2002,8 +2304,38 @@ const openApiSpecJson = r'''
           }
         }
       },
+      "BadGateway": {
+        "description": "PayWay refused the request or answered something unreadable",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "A dependency needed for this route is not usable (database down, or payment credentials absent)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
       "SuccessNoData": {
         "description": "Success with no payload",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SuccessEnvelope"
+            }
+          }
+        }
+      },
+      "Accepted": {
+        "description": "Noted. The gateway's claim is being checked; the outcome is read back from the payment.",
         "content": {
           "application/json": {
             "schema": {
@@ -2284,6 +2616,18 @@ const openApiSpecJson = r'''
           "is_active": {
             "type": "boolean",
             "default": true
+          },
+          "stock": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Units on hand; omit or null to leave the product untracked"
+          },
+          "low_stock_threshold": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Warn at or below this many units; null warns only at zero"
           }
         }
       },
@@ -2316,6 +2660,16 @@ const openApiSpecJson = r'''
           },
           "is_active": {
             "type": "boolean"
+          },
+          "stock": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Units on hand; null means the product is not stock-tracked"
+          },
+          "low_stock_threshold": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Warn at or below this many units; null warns only at zero"
           },
           "creator_id": {
             "type": "string"
@@ -2389,6 +2743,246 @@ const openApiSpecJson = r'''
           "ordered_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "payment_tran_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set when the sale came from a confirmed QR payment; null for a cash sale"
+          }
+        }
+      },
+      "Payment": {
+        "type": "object",
+        "description": "One QR payment. A sale exists only once the status is paid.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tran_id": {
+            "type": "string",
+            "description": "Id this POS issues to the payment gateway for the transaction",
+            "example": "2603121000001"
+          },
+          "cashier_id": {
+            "type": "string"
+          },
+          "cashier_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "platform": {
+            "type": "string",
+            "example": "Web"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "scanned",
+              "paid",
+              "expired",
+              "declined",
+              "failed"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "payway",
+              "cutluy"
+            ],
+            "description": "Which gateway the code was issued by. Only that gateway settles the payment."
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "KHR",
+              "USD"
+            ]
+          },
+          "charge_amount": {
+            "type": "number",
+            "description": "What the customer is charged. Equals amount unless the gateway takes a currency the shop does not price in."
+          },
+          "charge_currency": {
+            "type": "string",
+            "enum": [
+              "KHR",
+              "USD"
+            ],
+            "description": "Currency of charge_amount"
+          },
+          "exchange_rate": {
+            "type": "number",
+            "nullable": true,
+            "description": "Shop currency per charged unit, recorded when a conversion produced the code. Null when there was none."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            }
+          },
+          "qr_string": {
+            "type": "string",
+            "description": "EMVCo payload to render as a QR. Empty once the payment is no longer pending."
+          },
+          "abapay_deeplink": {
+            "type": "string",
+            "description": "Opens ABA Mobile instead of scanning (PayWay). Empty once the payment is no longer pending."
+          },
+          "checkout_url": {
+            "type": "string",
+            "description": "Hosted checkout page the customer can be sent to instead of scanning. Empty once the payment is no longer pending."
+          },
+          "app_store_url": {
+            "type": "string"
+          },
+          "play_store_url": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paid_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "payment_amount": {
+            "type": "number",
+            "nullable": true,
+            "description": "What the payer actually paid, which may differ in currency from the amount"
+          },
+          "payment_currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true,
+            "description": "Why the payment is declined or failed, in the gateway's words"
+          },
+          "sale_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "The sale this payment created. Null until paid."
+          },
+          "receipt_number": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "CutLuyEvent": {
+        "type": "object",
+        "description": "A CutLuy webhook delivery. data.payment.reference_id is this POS's transaction id.",
+        "required": [
+          "id",
+          "type",
+          "data"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Delivery id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "payment.completed",
+              "payment.scanned",
+              "payment.expired",
+              "payment.failed"
+            ]
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "payment": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "status"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "CutLuy's payment id"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "scanned",
+                      "paid",
+                      "expired",
+                      "failed"
+                    ]
+                  },
+                  "amount": {
+                    "type": "string",
+                    "example": "1.50"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "reference_id": {
+                    "type": "string",
+                    "description": "Transaction id this POS issued",
+                    "example": "2603121000001"
+                  },
+                  "approved_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "PaywayNotification": {
+        "type": "object",
+        "description": "A PayWay notification. It carries no signature, so only tran_id is used — as an address to re-read, never as evidence.",
+        "required": [
+          "tran_id"
+        ],
+        "properties": {
+          "tran_id": {
+            "type": "string",
+            "example": "2603121000001"
+          },
+          "status": {
+            "type": "string",
+            "description": "The gateway's own code for the outcome. Ignored; the Check-transaction API answers instead."
+          },
+          "payment_type": {
+            "type": "string",
+            "description": "Instrument the payer used"
+          },
+          "payment_amount": {
+            "type": "number"
+          },
+          "payment_currency": {
+            "type": "string"
+          },
+          "bank_ref": {
+            "type": "string"
           }
         }
       }

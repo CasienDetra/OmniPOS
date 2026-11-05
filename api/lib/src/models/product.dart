@@ -14,6 +14,8 @@ class Product {
     required this.creatorId,
     required this.createdAt,
     required this.updatedAt,
+    this.stock,
+    this.lowStockThreshold,
   });
 
   static Product fromDocument(Map<String, dynamic> doc) => Product(
@@ -27,6 +29,8 @@ class Product {
     creatorId: doc['creator_id'] as ObjectId?,
     createdAt: doc['created_at'] as DateTime? ?? DateTime.now(),
     updatedAt: doc['updated_at'] as DateTime? ?? DateTime.now(),
+    stock: (doc['stock'] as num?)?.toInt(),
+    lowStockThreshold: (doc['low_stock_threshold'] as num?)?.toInt(),
   );
 
   final ObjectId? id;
@@ -40,6 +44,21 @@ class Product {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  /// Units on hand. Null means this product is not stock-tracked: it can be
+  /// sold without limit and can never be reported as low.
+  final int? stock;
+
+  /// Warn at or below this many units. Null means only zero is a warning.
+  final int? lowStockThreshold;
+
+  bool get isLowStock {
+    final onHand = stock;
+    if (onHand == null) return false;
+    if (onHand <= 0) return true;
+    final threshold = lowStockThreshold;
+    return threshold != null && onHand <= threshold;
+  }
+
   Map<String, Object?> toDocument() => {
     'name': name,
     'code': code,
@@ -50,6 +69,8 @@ class Product {
     'creator_id': creatorId,
     'created_at': createdAt.toUtc(),
     'updated_at': updatedAt.toUtc(),
+    'stock': stock,
+    'low_stock_threshold': lowStockThreshold,
   };
 
   Map<String, Object?> toJson({String? typeName, String? creatorName}) => {
@@ -65,5 +86,7 @@ class Product {
     'creator_name': creatorName,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
+    'stock': stock,
+    'low_stock_threshold': lowStockThreshold,
   };
 }

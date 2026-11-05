@@ -42,6 +42,12 @@ Future<Response> _post(RequestContext context) async {
   final unitPrice = validator.requireNumber(body, 'unit_price', positive: true);
   final image = validator.optionalString(body, 'image');
   if (image != null) validateBase64Image(validator, image);
+  final stock = validator.optionalInt(body, 'stock', min: 0);
+  final lowStockThreshold = validator.optionalInt(
+    body,
+    'low_stock_threshold',
+    min: 0,
+  );
   validator.throwIfInvalid();
 
   final product = await _service.create(
@@ -52,6 +58,8 @@ Future<Response> _post(RequestContext context) async {
     image: image,
     creatorId: asObjectId(auth.id),
     isActive: body['is_active'] == null ? true : _boolFrom(body['is_active']),
+    stock: stock,
+    lowStockThreshold: lowStockThreshold,
   );
   return jsonSuccess(
     await _service.getJson(idHex(product.id!)),

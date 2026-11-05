@@ -17,6 +17,10 @@ const _saleSortFields = {
   'receipt_number': 'receipt_number',
 };
 
+/// A cart with its prices snapshotted from the catalogue, and the total the
+/// customer owes for it.
+typedef PricedCart = ({List<OrderItem> items, double totalPrice});
+
 class OrderService {
   OrderService({CounterService? counters})
     : _counters = counters ?? CounterService();
@@ -30,6 +34,23 @@ class OrderService {
     required String platform,
     required ObjectId cashierId,
   }) async {
+    final priced = await priceCart(cart);
+    return createSale(
+      items: priced.items,
+      totalPrice: priced.totalPrice,
+      cashierId: cashierId,
+      platform: platform,
+    );
+  }
+
+  /// Parse a cart and snapshot the catalogue prices onto its lines, without
+  /// persisting anything.
+  ///
+  /// Split out because a QR must be generated for the amount the Sale will
+  /// actually be: if the payment module priced a cart by itself and the rules
+  /// ever drifted, the customer would scan a code that does not match its own
+  /// receipt.
+  Future<PricedCart> priceCart(String cart) async {
     Map<String, dynamic> parsed;
     try {
       final decoded = jsonDecode(cart);
@@ -50,6 +71,12 @@ class OrderService {
         throw InvalidEntityException(['qty for "${entry.key}" must be > 0']);
       }
       final product = await getActiveProduct(entry.key);
+      final stock = product.stock;
+      if (stock != null && stock < qty) {
+        throw ConflictException(
+          'Only $stock of "${product.name}" left; $qty were requested',
+        );
+      }
       final linePrice = product.unitPrice * qty;
       totalPrice += linePrice;
       items.add(
@@ -61,16 +88,50 @@ class OrderService {
         ),
       );
     }
+    return (
+      items: items,
+      totalPrice: double.parse(totalPrice.toStringAsFixed(2)),
+    );
+  }
+
+  /// Persist one completed Sale.
+  ///
+  /// A Sale paid by QR passes the gateway's [paymentTranId], and that is the
+  /// only guard that matters: two confirmations of the same transaction — the
+  /// notification racing the cashier's poll — must not print two receipts, and
+  /// the unique partial index on `payment_tran_id` makes the second insert
+  /// impossible rather than merely unlikely.
+  Future<Order> createSale({
+    required List<OrderItem> items,
+    required double totalPrice,
+    required ObjectId cashierId,
+    required String platform,
+    String? paymentTranId,
+    bool enforceStock = true,
+  }) async {
+    // Stock is taken before the Sale is written, for a cash sale and a QR
+    // confirmation alike. A refused cash sale therefore never draws a receipt
+    // number, and a losing writer in the duplicate-key race puts its take back
+    // instead of shrinking the shelf.
+    await _takeStock(items, enforce: enforceStock);
 
     final order = Order(
       receiptNumber: await _counters.nextReceiptNumber(),
       cashierId: cashierId,
       platform: platform.isEmpty ? 'Web' : platform,
-      totalPrice: double.parse(totalPrice.toStringAsFixed(2)),
+      totalPrice: totalPrice,
       items: items,
       orderedAt: DateTime.now().toUtc(),
+      paymentTranId: paymentTranId,
     );
-    final id = await insertDoc('orders', order.toDocument());
+    final ObjectId id;
+    try {
+      id = await insertDoc('orders', order.toDocument());
+    } catch (_) {
+      await _releaseStock(items);
+      rethrow;
+    }
+
     return Order(
       id: id,
       receiptNumber: order.receiptNumber,
@@ -79,7 +140,64 @@ class OrderService {
       totalPrice: order.totalPrice,
       items: order.items,
       orderedAt: order.orderedAt,
+      paymentTranId: order.paymentTranId,
     );
+  }
+
+  /// Decrements tracked products. With [enforce], a line that would go below
+  /// zero is refused; without it the decrement always lands, which is what a
+  /// QR payment needs once the money has moved. Untracked products carry no
+  /// `stock` field and are left alone.
+  ///
+  /// If a later line is refused, the lines already taken are put back, so one
+  /// half-sold cart cannot quietly shrink the shelf.
+  Future<void> _takeStock(
+    List<OrderItem> items, {
+    required bool enforce,
+  }) async {
+    final taken = <OrderItem>[];
+    try {
+      for (final item in items) {
+        final productId = asObjectId(item.productId);
+        final modified = await incrementWhere(
+          'products',
+          {
+            '_id': productId,
+            'stock': {r'$ne': null, if (enforce) r'$gte': item.qty},
+          },
+          {'stock': -item.qty},
+        );
+        if (modified > 0) {
+          taken.add(item);
+          continue;
+        }
+        if (!enforce) continue;
+        final doc = await findDoc('products', {'_id': productId});
+        final stock = (doc?['stock'] as num?)?.toInt();
+        if (stock != null) {
+          throw ConflictException(
+            'Only $stock of "${item.name}" left; ${item.qty} were requested',
+          );
+        }
+      }
+    } catch (_) {
+      await _releaseStock(taken);
+      rethrow;
+    }
+  }
+
+  /// Puts back what [_takeStock] took. Untracked products are untouched.
+  Future<void> _releaseStock(List<OrderItem> items) async {
+    for (final item in items) {
+      await incrementWhere(
+        'products',
+        {
+          '_id': asObjectId(item.productId),
+          'stock': {r'$ne': null},
+        },
+        {'stock': item.qty},
+      );
+    }
   }
 
   Future<Product> getActiveProduct(String rawId) async {

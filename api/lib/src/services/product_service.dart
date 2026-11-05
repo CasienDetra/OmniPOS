@@ -2,6 +2,7 @@ import 'package:mongo_dart/mongo_dart.dart';
 
 import '../core/exceptions.dart';
 import '../core/pagination.dart';
+import '../core/validation.dart';
 import '../models/product.dart';
 import '../models/product_type.dart';
 import '../models/user.dart';
@@ -96,6 +97,48 @@ class ProductService {
     };
   }
 
+  /// Tracked products at or below their warning line, and every tracked
+  /// product with none left. Untracked products (`stock` absent) never match.
+  static const Map<String, Object?> lowStockFilter = {
+    r'$expr': {
+      r'$and': [
+        {r'$isNumber': r'$stock'},
+        {
+          r'$or': [
+            {
+              r'$lte': [r'$stock', 0],
+            },
+            {
+              r'$and': [
+                {r'$isNumber': r'$low_stock_threshold'},
+                {
+                  r'$lte': [r'$stock', r'$low_stock_threshold'],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  static Future<int> lowStockCount() => countDocs('products', lowStockFilter);
+
+  /// The products an admin has to act on, emptiest first.
+  Future<Map<String, Object?>> lowStock({int limit = 200}) async {
+    final total = await lowStockCount();
+    final docs = await findPage(
+      collection: 'products',
+      filter: lowStockFilter,
+      sort: {'stock': 1},
+      limit: limit,
+    );
+    return {
+      'data': [for (final doc in docs) Product.fromDocument(doc).toJson()],
+      'total': total,
+    };
+  }
+
   Future<Product> get(String rawId) async {
     final doc = await findDoc('products', {'_id': asObjectId(rawId)});
     if (doc == null) {
@@ -125,6 +168,8 @@ class ProductService {
     String? image,
     ObjectId? creatorId,
     bool isActive = true,
+    int? stock,
+    int? lowStockThreshold,
   }) async {
     await _ensureCodeUnique(code);
     final imageUrl = (image == null || image.isEmpty)
@@ -141,6 +186,8 @@ class ProductService {
       creatorId: creatorId,
       createdAt: now,
       updatedAt: now,
+      stock: stock,
+      lowStockThreshold: lowStockThreshold,
     );
     final id = await insertDoc('products', product.toDocument());
     return Product(
@@ -154,6 +201,8 @@ class ProductService {
       creatorId: creatorId,
       createdAt: now,
       updatedAt: now,
+      stock: stock,
+      lowStockThreshold: lowStockThreshold,
     );
   }
 
@@ -165,6 +214,8 @@ class ProductService {
     double? unitPrice,
     String? image,
     bool? isActive,
+    FieldUpdate<int>? stock,
+    FieldUpdate<int>? lowStockThreshold,
   }) async {
     final existing = await get(rawId);
     final fields = <String, Object?>{
@@ -172,6 +223,9 @@ class ProductService {
       if (typeId != null) 'type_id': typeId,
       if (unitPrice != null) 'unit_price': unitPrice,
       if (isActive != null) 'is_active': isActive,
+      if (stock != null) 'stock': stock.value,
+      if (lowStockThreshold != null)
+        'low_stock_threshold': lowStockThreshold.value,
     };
     if (code != null && code != existing.code) {
       await _ensureCodeUnique(code, excludeId: rawId);
