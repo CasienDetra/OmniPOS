@@ -403,13 +403,15 @@ token, because a payment gateway's servers call it — see
 
 ## Payments (QR)
 
-Two Cambodian QR gateways are implemented, and one drives the payment routes at
-a time: **CutLuy** (<https://cutluy.com>, the default) and **ABA PayWay**
-(<https://developer.payway.com.kh>). `PAYMENT_PROVIDER=cutluy|payway` chooses,
-which is configuration rather than a code change: the routes, the `Payment`
-model, and the state machine that turns a confirmed code into a Sale are
-shared, and each gateway's hashes, currencies, and error codes stay behind
-`PaymentProvider` (`api/lib/src/services/payment_provider.dart`). The counter
+Two Cambodian QR gateways are implemented: **CutLuy** (<https://cutluy.com>, the
+default) and **ABA PayWay** (<https://developer.payway.com.kh>).
+`PAYMENT_PROVIDER=cutluy|payway` chooses which one issues new codes, which is
+configuration rather than a code change: the routes, the `Payment` model, and
+the state machine that turns a confirmed code into a Sale are shared, and each
+gateway's hashes, currencies, and error codes stay behind `PaymentProvider`
+(`api/lib/src/services/payment_provider.dart`). A payment already on the
+counter is settled by the gateway that issued it, not by today's setting, so
+switching providers does not strand the codes the old one opened. The counter
 opens a code for a cart and the customer pays it with ABA Pay or any
 KHQR-wallet app.
 
@@ -457,9 +459,12 @@ fails any of that is refused before its contents are read. PayWay signs nothing
 on that call, so its `status` and `payment_amount` are treated as a pointer.
 Either way the API re-reads the transaction through its own authenticated call
 and confirms only on a paid answer, and refuses to sell when the amount it
-reads differs from the amount the QR was issued for. A delivery is acknowledged
-fast (`202`) and settled afterwards, because a gateway retries a callback it
-cannot make sense of.
+reads differs from the amount the QR was issued for. The delivery is settled
+before it is acknowledged: a `2xx` means the sale is recorded, and a settlement
+that could not happen answers `503` so the gateway's retry does the work. A
+replayed delivery for a transaction that is already settled, or one that
+arrives within a few seconds of the last check, answers `202` without another
+gateway call.
 
 The differences that are not shared are the money. CutLuy charges USD only, so
 a shop whose shelf prices are in riel has each cart line converted at
@@ -555,7 +560,7 @@ GET  /api/file/<filename>       stream file (?download=true → attachment)
 Three layers, all runnable from `api/` with the stack up (`docker compose up -d`):
 
 ```bash
-dart test                 # 110 tests: unit + integration vs live server
+dart test                 # 219 tests: unit + integration vs live server
 dart run scripts/smoke.dart   # 12-step E2E smoke, exits 1 on failure
 ```
 
@@ -578,10 +583,10 @@ dart run scripts/smoke.dart   # 12-step E2E smoke, exits 1 on failure
   unsigned delivery never becoming money whichever gateway is selected.
 * `scripts/smoke.dart` — one-shot demo flow with a PASS/FAIL line per step.
 
-Postman: import `postman/OmniPOS.postman_collection.json`, run folders top to
-bottom. Tokens are captured automatically into collection variables; the
-Cleanup folder (35–38) removes everything the flow created. Part 9 exercises
-the QR routes and passes with or without gateway credentials.
+To drive the API by hand, use Swagger UI: log in at
+`POST /api/v1/account/auth/login`, then paste the returned token into
+*Authorize*. `scripts/smoke.dart` runs the same flow end to end with a PASS/FAIL
+line per step.
 
 ## Design notes (vs. the NestJS/Sequelize reference)
 

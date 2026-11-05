@@ -67,9 +67,10 @@ disagrees with either service's `pubspec.yaml` or with an entry here.
   `X-CutLuy-Signature: t=<unix>,v1=<hex>` is verified as
   `HMAC-SHA256(secret, "<t>."<raw body>)` over the bytes before they are
   parsed, in constant time, with a timestamp window (`CUTLUY_WEBHOOK_TOLERANCE_
-  SECONDS`, five minutes by default); the callback answers `202` immediately and
-  settles the payment afterwards, and a delivery that names a transaction this
-  till never issued is acknowledged rather than sold. CutLuy charges USD only,
+  SECONDS`, five minutes by default); the callback settles the payment before
+  acknowledging it — a settlement that could not happen answers `503` so the
+  gateway retries — and a delivery that names a transaction this till never
+  issued is acknowledged rather than sold. CutLuy charges USD only,
   so a shop that prices in riel has each cart line converted at
   `CUTLUY_KHR_USD_RATE` and rounded to cents before the lines are summed; the
   `Payment` row keeps both figures and the rate, while the Sale is booked from
@@ -107,7 +108,9 @@ disagrees with either service's `pubspec.yaml` or with an entry here.
   their auth and the `Payment` responses are unchanged; `Payment` gained
   `provider`, `charge_amount`, `charge_currency`, `exchange_rate` and
   `checkout_url`, and hides the QR, the deeplink and the checkout link as soon
-  as a payment is no longer payable.
+  as a payment is no longer payable. A payment that is already open is settled
+  by the gateway recorded on its own row, so codes issued before the switch can
+  still be confirmed.
 - Every versioned endpoint moved from `/api/...` to
   `/api/v1/...`, so clients written against 1.0.0 must change their base path.
   The prefix now lives in one constant
