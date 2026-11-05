@@ -9,11 +9,6 @@ final _service = PaymentService();
 /// Transactions being settled right now.
 final _inFlight = <String>{};
 
-/// When each transaction was last settled. A public endpoint that can be
-/// replayed must not turn every repeat into a gateway read.
-final _lastSettle = <String, DateTime>{};
-const _settleWindow = Duration(seconds: 5);
-
 /// The gateway's "this payment changed state" call.
 ///
 /// This is the only route in the API that answers without a token and cannot
@@ -60,10 +55,10 @@ Future<Response> _post(RequestContext context) async {
   // Already settled. Replaying a paid callback must not become an unlimited
   // read of the gateway's API.
   if (payment.status.isTerminal) {
-    return jsonSuccess(
-      {'tran_id': pointer.tranId, 'status': payment.status.name},
-      message: 'Already ${payment.status.name}.',
-    );
+    return jsonSuccess({
+      'tran_id': pointer.tranId,
+      'status': payment.status.name,
+    }, message: 'Already ${payment.status.name}.');
   }
 
   // The first parse had to guess which gateway sent this; now that the payment
@@ -78,31 +73,28 @@ Future<Response> _post(RequestContext context) async {
     throw const BadRequestException('The notification names two transactions');
   }
 
-  final now = DateTime.now();
+  // Only one settlement per transaction at a time. The delivery already
+  // running may describe an older event than this one — a pending answer for a
+  // payment that has just been paid — so this one is not acknowledged: its
+  // retry asks the gateway again once the settlement ahead has finished.
   if (!_inFlight.add(pointer.tranId)) {
-    return _accepted(pointer.tranId, 'Already checking it with the gateway.');
+    throw const ServiceUnavailableException(
+      'Another notification for this transaction is being settled; retry it.',
+    );
   }
-  final last = _lastSettle[pointer.tranId];
-  if (last != null && now.difference(last) < _settleWindow) {
-    _inFlight.remove(pointer.tranId);
-    return _accepted(pointer.tranId, 'Checked a moment ago.');
-  }
-  _lastSettle[pointer.tranId] = now;
-  _pruneSettles(now);
 
   try {
     final settled = await _service.refresh(pointer.tranId);
     stderr.writeln(
       'Notification settled ${pointer.tranId} as ${settled.status.name}',
     );
-    return jsonSuccess(
-      {'tran_id': pointer.tranId, 'status': settled.status.name},
-      message: 'Settled as ${settled.status.name}.',
-    );
+    return jsonSuccess({
+      'tran_id': pointer.tranId,
+      'status': settled.status.name,
+    }, message: 'Settled as ${settled.status.name}.');
   } catch (error, stackTrace) {
     // The sender is not told this delivery was handled: its retry is what
     // turns a database or network failure into the Sale it should have been.
-    _lastSettle.remove(pointer.tranId);
     stderr.writeln('Could not settle ${pointer.tranId}: $error\n$stackTrace');
     throw const ServiceUnavailableException(
       'The notification could not be settled; retry it.',
@@ -110,16 +102,4 @@ Future<Response> _post(RequestContext context) async {
   } finally {
     _inFlight.remove(pointer.tranId);
   }
-}
-
-Response _accepted(String tranId, String message) => jsonSuccess(
-  {'tran_id': tranId},
-  statusCode: 202,
-  message: message,
-);
-
-/// Keeps [_lastSettle] from growing without bound on a public endpoint.
-void _pruneSettles(DateTime now) {
-  if (_lastSettle.length < 1000) return;
-  _lastSettle.removeWhere((_, at) => now.difference(at) > _settleWindow);
 }

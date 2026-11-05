@@ -462,9 +462,10 @@ and confirms only on a paid answer, and refuses to sell when the amount it
 reads differs from the amount the QR was issued for. The delivery is settled
 before it is acknowledged: a `2xx` means the sale is recorded, and a settlement
 that could not happen answers `503` so the gateway's retry does the work. A
-replayed delivery for a transaction that is already settled, or one that
-arrives within a few seconds of the last check, answers `202` without another
-gateway call.
+replayed delivery for a transaction that is already settled answers without
+another gateway call; one that arrives while another settlement of the same
+transaction is running answers `503`, so its retry checks again rather than
+being lost.
 
 The differences that are not shared are the money. CutLuy charges USD only, so
 a shop whose shelf prices are in riel has each cart line converted at
