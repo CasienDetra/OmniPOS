@@ -138,7 +138,7 @@ packages:
     source: hosted
     version: "1.15.1"
   crypto:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: crypto
       sha256: c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf
@@ -450,7 +450,7 @@ packages:
     source: hosted
     version: "2.2.1"
   qr:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: qr
       sha256: "5a1d2586170e172b8a8c8470bbbffd5eb0cd38a66c0d77155ea138d3af3a4445"
@@ -714,4 +714,4 @@ packages:
     source: hosted
     version: "3.1.4"
 sdks:
-  dart: ">=3.10.0 <4.0.0"
+  dart: ">=3.13.0 <4.0.0"

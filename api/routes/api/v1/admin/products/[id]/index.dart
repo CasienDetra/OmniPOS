@@ -37,6 +37,18 @@ Future<Response> _put(RequestContext context, String id) async {
         body['is_active'] == 'true' ||
         body['is_active'] == '1';
   }
+  // Present means "set", even when it is null: that is how a product stops
+  // being stock-tracked. Absent means "leave it alone".
+  FieldUpdate<int>? stock;
+  if (body.containsKey('stock')) {
+    stock = (value: validator.optionalInt(body, 'stock', min: 0));
+  }
+  FieldUpdate<int>? lowStockThreshold;
+  if (body.containsKey('low_stock_threshold')) {
+    lowStockThreshold = (
+      value: validator.optionalInt(body, 'low_stock_threshold', min: 0),
+    );
+  }
   validator.throwIfInvalid();
 
   await _service.update(
@@ -47,6 +59,8 @@ Future<Response> _put(RequestContext context, String id) async {
     unitPrice: unitPrice,
     image: image,
     isActive: isActive,
+    stock: stock,
+    lowStockThreshold: lowStockThreshold,
   );
   return jsonSuccess(
     await _service.getJson(id),

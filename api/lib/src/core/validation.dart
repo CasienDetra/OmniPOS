@@ -56,6 +56,10 @@ bool queryBool(
 String? emptyToNull(String? value) =>
     (value == null || value.trim().isEmpty) ? null : value.trim();
 
+/// A field an update may leave alone (the parameter itself is null) or set,
+/// including set to null (a present [FieldUpdate] whose [value] is null).
+typedef FieldUpdate<T> = ({T? value});
+
 class Validator {
   final List<String> errors = [];
 
@@ -110,6 +114,27 @@ class Validator {
     if (number == null) {
       errors.add('$field is required');
       return 0;
+    }
+    return number;
+  }
+
+  /// An optional whole number. Absent is null; a fractional or non-numeric
+  /// value is an error rather than a truncated guess.
+  int? optionalInt(Map<String, dynamic> body, String field, {int? min}) {
+    final value = body[field];
+    if (value == null) return null;
+    final number = switch (value) {
+      final num n when n == n.roundToDouble() => n.toInt(),
+      final String s => int.tryParse(s),
+      _ => null,
+    };
+    if (number == null) {
+      errors.add('$field must be an integer');
+      return null;
+    }
+    if (min != null && number < min) {
+      errors.add('$field must be at least $min');
+      return null;
     }
     return number;
   }

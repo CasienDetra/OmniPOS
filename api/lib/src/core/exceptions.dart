@@ -30,6 +30,12 @@ class ConflictException extends AppException {
   const ConflictException([String error = 'Conflict']) : super(409, error);
 }
 
+/// The resource existed and will never come back — a QR whose payment was paid
+/// or expired, which must not keep being displayed.
+class GoneException extends AppException {
+  const GoneException([String error = 'Gone']) : super(410, error);
+}
+
 class InvalidEntityException extends AppException {
   InvalidEntityException(List<String> messages)
     : super(
@@ -53,4 +59,14 @@ class BadGatewayException extends AppException {
 class DatabaseConnectionFailedException extends AppException {
   const DatabaseConnectionFailedException()
     : super(503, 'Database connection failed');
+}
+
+/// A feature this deployment cannot serve until it is configured — the payment
+/// provider has no credentials, for instance. Reported as unavailable rather
+/// than as a bad request or an internal error, because nothing the caller does
+/// can fix it and nothing broke inside the service.
+class ServiceUnavailableException extends AppException {
+  const ServiceUnavailableException([
+    String error = 'Service temporarily unavailable',
+  ]) : super(503, error);
 }

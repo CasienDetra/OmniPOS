@@ -397,6 +397,103 @@ services' `.env.example` files describe.)
 `Cashier = 2`; `POST /api/v1/account/auth/switch {"role_id": 2}` re-issues the
 token with a different default role. Route groups `/api/v1/admin/*` and
 `/api/v1/cashier/*` are guarded by role in the global middleware.
+`/api/v1/payments/callback` is the only other route that answers without a
+token, because a payment gateway's servers call it — see
+[Payments](#payments-qr).
+
+## Payments (QR)
+
+Two Cambodian QR gateways are implemented: **CutLuy** (<https://cutluy.com>, the
+default) and **ABA PayWay** (<https://developer.payway.com.kh>).
+`PAYMENT_PROVIDER=cutluy|payway` chooses which one issues new codes, which is
+configuration rather than a code change: the routes, the `Payment` model, and
+the state machine that turns a confirmed code into a Sale are shared, and each
+gateway's hashes, currencies, and error codes stay behind `PaymentProvider`
+(`api/lib/src/services/payment_provider.dart`). A payment already on the
+counter is settled by the gateway that issued it, not by today's setting, so
+switching providers does not strand the codes the old one opened. The counter
+opens a code for a cart and the customer pays it with ABA Pay or any
+KHQR-wallet app.
+
+```
+POST /api/v1/cashier/payments              {"cart": "{\"<productId>\": 2}", "platform": "Web"}
+GET  /api/v1/cashier/payments/:tranId      poll: asks the gateway what became of the code
+GET  /api/v1/cashier/payments/:tranId/qr   the code drawn as SVG, for a till that shows its own card
+POST /api/v1/payments/callback             the gateway's notification (public, verified where it is signed)
+```
+
+The counter does not have to send a customer to a hosted checkout page.
+`Payment.qr_string` is the raw KHQR payload, and `.../qr` renders it as SVG at
+error correction level H — the level that leaves room to put a logo or a riel
+medallion over the centre of the code without breaking the scan — so a till can
+draw the card itself and refresh it as often as it likes without spending a
+gateway call. The image is drawn from the payload this service already holds,
+carries module geometry only, and is served `no-store`; once a payment leaves
+`pending` the endpoint answers `410` rather than show a code that can no longer
+be paid. `checkout_url` comes back with the payment as well, for shops that
+would rather hand the customer a link.
+
+To see that card without writing the front end first:
+
+```bash
+cd api && dart run scripts/qr_card.dart            # opens a fresh code and draws it
+cd api && dart run scripts/qr_card.dart --tran=<id>  # redraw one already on the counter
+```
+
+It writes a self-contained `api/build/qr-card.html` — the SVG inlined, the
+amount and its conversion in the header, a `$` or ៛ medallion over the centre,
+and the code retiring itself when the gateway's five minutes run out.
+
+A `Payment` is not a `Sale`. The payment row is written when the QR is
+generated; the sale, and with it a receipt number, is created only once the
+gateway has confirmed the payment. An abandoned QR therefore leaves no hole in
+the receipt sequence, which is what makes a hole meaningful. Uniqueness comes
+from a partial unique index on `orders.payment_tran_id`, so two concurrent
+confirmations of one transaction still produce exactly one sale.
+
+Nothing in a notification is trusted as money. CutLuy signs its deliveries —
+`X-CutLuy-Signature: t=<unix>,v1=<hex>` is checked as
+`HMAC-SHA256(secret, "<t>."<raw body>)` over the bytes as they arrived, in
+constant time, with a five-minute window on the timestamp, and a delivery that
+fails any of that is refused before its contents are read. PayWay signs nothing
+on that call, so its `status` and `payment_amount` are treated as a pointer.
+Either way the API re-reads the transaction through its own authenticated call
+and confirms only on a paid answer, and refuses to sell when the amount it
+reads differs from the amount the QR was issued for. The delivery is settled
+before it is acknowledged: a `2xx` means the sale is recorded, and a settlement
+that could not happen answers `503` so the gateway's retry does the work. A
+replayed delivery for a transaction that is already settled, or one that
+arrives within a few seconds of the last check, answers `202` without another
+gateway call.
+
+The differences that are not shared are the money. CutLuy charges USD only, so
+a shop whose shelf prices are in riel has each cart line converted at
+`CUTLUY_KHR_USD_RATE` and rounded to cents before the lines are added up — the
+arithmetic a cashier can repeat on screen. The row keeps both figures, the
+shop's `total_price` and the customer's `charge_amount`, plus the rate that
+produced it, while the Sale is booked from the original riel lines. PayWay takes
+KHR directly and asks for none of that. Every PayWay request is signed with
+`hash = base64(HMAC-SHA512(concatenated field values, api_key))`; the field
+order is pinned by `api/test/unit/payway_client_test.dart` against digests the
+gateway itself produced.
+
+To use CutLuy: create a payment link and take the API key from the CutLuy
+dashboard, put it in the root `.env` as `CUTLUY_API_KEY`, add
+`CUTLUY_KHR_USD_RATE` if the shop prices in riel, and register the callback URL
+to get `CUTLUY_WEBHOOK_SECRET`. Quota is spent on paid transactions (50 a month
+on the free plan), and CutLuy answers `402` when it is exhausted; the payment
+routes pass that on as a `503` that says what to check.
+
+To use PayWay: set `PAYMENT_PROVIDER=payway`, register at
+<https://sandbox.payway.com.kh/register-sandbox/>, put the merchant id and API
+key in the root `.env` (`PAYWAY_MERCHANT_ID`, `PAYWAY_API_KEY`), and ask PayWay
+to whitelist your public IP or every call comes back with code `6`.
+`PAYWAY_CALLBACK_URL` is optional — with it empty the counter's polling is what
+closes a sale, which works on a laptop with no public address.
+
+Until the selected gateway's variables are set the payment routes answer
+`503 Service Unavailable` and name the missing ones, so the stack still starts
+and CI stays green without credentials.
 
 ## API surface
 
@@ -428,10 +525,15 @@ PUT    /api/v1/admin/users/:id/password     reset password
 
 GET    /api/v1/cashier/ordering/products    types with nested active products
 POST   /api/v1/cashier/ordering/order       checkout {"cart": "{\"<productId>\": qty}", "platform": "Web"}
+POST   /api/v1/cashier/payments             QR checkout, same cart → {tran_id, qr_string, ...}
+GET    /api/v1/cashier/payments/:tranId     refresh a payment from the gateway
+GET    /api/v1/cashier/payments/:tranId/qr  the code as SVG (image/svg+xml, no-store, 410 once settled)
 GET    /api/v1/cashier/sales                own sales only
 GET/DELETE /api/v1/cashier/sales/:id
 
 GET    /api/v1/reports/invoice/:id          invoice PDF (admin: any order, cashier: own only)
+
+POST   /api/v1/payments/callback            gateway notification (public, verified where it is signed)
 
 GET    /api/v1/testing/basic                public echo endpoint (no auth)
 POST   /api/v1/testing/upload/file          public base64 upload proxy to file service
@@ -458,22 +560,33 @@ GET  /api/file/<filename>       stream file (?download=true → attachment)
 Three layers, all runnable from `api/` with the stack up (`docker compose up -d`):
 
 ```bash
-dart test                 # 59 tests: unit + authz integration vs live server
+dart test                 # 219 tests: unit + integration vs live server
 dart run scripts/smoke.dart   # 12-step E2E smoke, exits 1 on failure
 ```
 
 * `test/unit/` — pure logic: JWT round-trip and tampering, bcrypt, validators,
-  pagination, order/price snapshot models, invoice PDF rendering.
+  pagination, order/price snapshot models, invoice PDF rendering, and both
+  gateway clients: the PayWay signed-request digests checked against
+  gateway-produced vectors, the CutLuy request and error mapping, the webhook
+  signature checked against digests computed with Python's `hmac`, and the QR
+  renderer's grid, quiet zone and SVG output — including that a payload it is
+  handed can never become markup.
 * `test/integration/authz_test.dart` — HTTP against a running instance
   (`API_BASE_URL` overrides, default `http://localhost:3000`); auto-skips when
   the server is unreachable. Covers 401/403 rules, checkout validation, the
   order lifecycle and sequential receipt numbers. Test data is prefixed
   `zz-test-` and deleted again in teardown.
+* `test/integration/payments_test.dart` — the payment routes' auth matrix, the
+  QR image route's (401, 403, 404, 405, and a real SVG served `no-store` when a
+  gateway is configured), and the callback's behaviour without any gateway
+  credentials: cashier-only guards, 503 naming the missing configuration, and an
+  unsigned delivery never becoming money whichever gateway is selected.
 * `scripts/smoke.dart` — one-shot demo flow with a PASS/FAIL line per step.
 
-Postman: import `postman/OmniPOS.postman_collection.json`, run folders top to
-bottom. Tokens are captured automatically into collection variables; the
-Cleanup folder (30–33) removes everything the flow created.
+To drive the API by hand, use Swagger UI: log in at
+`POST /api/v1/account/auth/login`, then paste the returned token into
+*Authorize*. `scripts/smoke.dart` runs the same flow end to end with a PASS/FAIL
+line per step.
 
 ## Design notes (vs. the NestJS/Sequelize reference)
 

@@ -28,3 +28,14 @@ coverage/
 
 # Node tooling used for ad-hoc testing (newman, npm installs)
 node_modules/
+
+# Local demo / probe artifacts. Machine-specific scripts and the files they
+# generate; never source.
+/scripts/invoice.pdf
+/scripts/live_demo.py
+/scripts/payment_preview.html
+/scripts/payment_qr.png
+/scripts/test_all_routes.py
+/scripts/test_payment_flow.py
+/architecture.breakscale
+/package-lock.json

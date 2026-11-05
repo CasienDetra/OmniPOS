@@ -1,4 +1,5 @@
 import '../repositories/mongo.dart';
+import 'product_service.dart';
 
 /// Dashboard stats endpoint (v4 a1-dashboard equivalent).
 class DashboardService {
@@ -67,6 +68,7 @@ class DashboardService {
       'revenue_week': (week?['revenue'] as num?)?.toDouble() ?? 0,
       'products_total': await countDocs('products'),
       'users_total': await countDocs('users'),
+      'low_stock': await ProductService.lowStockCount(),
       'top_products': [
         for (final row in topProducts)
           {

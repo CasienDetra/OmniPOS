@@ -47,6 +47,7 @@ class Order {
     required this.totalPrice,
     required this.items,
     required this.orderedAt,
+    this.paymentTranId,
   });
 
   static Order fromDocument(Map<String, dynamic> doc) => Order(
@@ -60,6 +61,7 @@ class Order {
         if (item is Map) OrderItem.fromMap(Map<String, dynamic>.from(item)),
     ],
     orderedAt: doc['ordered_at'] as DateTime? ?? DateTime.now(),
+    paymentTranId: doc['payment_tran_id'] as String?,
   );
 
   final ObjectId? id;
@@ -70,6 +72,12 @@ class Order {
   final List<OrderItem> items;
   final DateTime orderedAt;
 
+  /// The gateway's transaction id for a Sale paid by QR, and null for one paid
+  /// in cash. `orders.payment_tran_id` carries a unique partial index, so this
+  /// is what makes "one transaction, one Sale" a database fact rather than a
+  /// check two concurrent callbacks could both pass.
+  final String? paymentTranId;
+
   Map<String, Object?> toDocument() => {
     'receipt_number': receiptNumber,
     'cashier_id': cashierId,
@@ -77,6 +85,7 @@ class Order {
     'total_price': totalPrice,
     'items': [for (final item in items) item.toMap()],
     'ordered_at': orderedAt.toUtc(),
+    'payment_tran_id': paymentTranId,
   };
 
   Map<String, Object?> toJson({String? cashierName}) => {
@@ -88,5 +97,6 @@ class Order {
     'total_price': totalPrice,
     'items': [for (final item in items) item.toJson()],
     'ordered_at': orderedAt.toIso8601String(),
+    'payment_tran_id': paymentTranId,
   };
 }
