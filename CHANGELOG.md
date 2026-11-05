@@ -46,10 +46,69 @@ disagrees with either service's `pubspec.yaml` or with an entry here.
   where a path genuinely must be writable.
 - Resource ceilings in the deploy overlay — memory, CPU and pids per service,
   sized and justified for a small shop's single 4 GB host.
+- Payment by QR through PayWay (ABA Bank Cambodia), against its sandbox.
+  `POST /api/v1/cashier/payments` asks the gateway for a KHQR for a cart,
+  `GET /api/v1/cashier/payments/:tranId` asks what became of it, and
+  `POST /api/v1/payments/callback` receives the gateway's notification. A
+  payment is its own record: the sale and its receipt number are written only
+  when the gateway confirms the code was paid, so an abandoned QR leaves no
+  gap in the receipt sequence. `api/lib/src/services/payway_client.dart` signs
+  each request with `HMAC-SHA512` over the gateway's documented field order and
+  maps its reject codes to sentences; `api/test/unit/payway_client_test.dart`
+  pins the field order and digests. PayWay signs nothing on the notification,
+  so the callback is treated as a pointer and the transaction is re-read from
+  the signed Check-transaction API before anything is sold. A unique partial
+  index on `orders.payment_tran_id` makes double confirmation impossible. The
+  routes answer `503` naming `PAYWAY_MERCHANT_ID` and `PAYWAY_API_KEY` until
+  those are set, so the stack, its tests and CI all still run credential-free.
+- ABA KHQR payments through **CutLuy** (<https://cutluy.com>) as a second
+  gateway behind the same three payment routes, selected with
+  `PAYMENT_PROVIDER`. CutLuy signs its notifications, so
+  `X-CutLuy-Signature: t=<unix>,v1=<hex>` is verified as
+  `HMAC-SHA256(secret, "<t>."<raw body>)` over the bytes before they are
+  parsed, in constant time, with a timestamp window (`CUTLUY_WEBHOOK_TOLERANCE_
+  SECONDS`, five minutes by default); the callback answers `202` immediately and
+  settles the payment afterwards, and a delivery that names a transaction this
+  till never issued is acknowledged rather than sold. CutLuy charges USD only,
+  so a shop that prices in riel has each cart line converted at
+  `CUTLUY_KHR_USD_RATE` and rounded to cents before the lines are summed; the
+  `Payment` row keeps both figures and the rate, while the Sale is booked from
+  the original riel lines. A `402` spent quota, a `401` unknown key, a `403`
+  suspended account and a `429` with its `Retry-After` each reach the counter as
+  a `503` that says what to do, and nothing is retried in a loop because
+  creation is rate limited. `api/test/unit/webhook_signature_test.dart` pins the
+  signature against digests computed with Python's `hmac`.
+- `GET /api/v1/cashier/payments/:tranId/qr` draws the payment's KHQR itself, as
+  `image/svg+xml`, so a counter can show its own card instead of sending the
+  customer to the gateway's hosted checkout page. `api/lib/src/core/qr_svg.dart`
+  renders the payload at error correction level H — the level that survives a
+  logo or a riel medallion over the centre of the code — writes module geometry
+  only, and never the payload text, so a hostile string cannot become markup. The
+  image is served `no-store` and costs no gateway call; a payment that is no
+  longer `pending` answers `410` rather than display a code nobody can pay, and
+  only the cashier who opened it may see it.
+- A `PaymentStatus.scanned` between `pending` and `paid`: a customer whose
+  banking app has the payment open is neither money nor a dead code, so the QR
+  comes off the screen while the row stays one a confirmation can be written
+  for.
+- Optional stock tracking on products: `stock` (null means untracked) and
+  `low_stock_threshold`, settable on create and update. A cash sale decrements
+  the shelf atomically and answers `409` rather than overselling; a confirmed
+  QR sale is always written and may drive stock negative, because the money has
+  already moved. `GET /api/v1/admin/products/low-stock` lists what needs
+  restocking, emptiest first, and the dashboard carries a `low_stock` count.
 
 ### Changed
 
-- **Breaking:** every versioned endpoint moved from `/api/...` to
+- **Breaking:** the payment routes no longer drive PayWay by default. Which
+  gateway answers is read from `PAYMENT_PROVIDER` (`cutluy` when it is unset),
+  so a deployment that already has `PAYWAY_MERCHANT_ID` in its environment and
+  wants it to keep taking money must set `PAYMENT_PROVIDER=payway`. The routes,
+  their auth and the `Payment` responses are unchanged; `Payment` gained
+  `provider`, `charge_amount`, `charge_currency`, `exchange_rate` and
+  `checkout_url`, and hides the QR, the deeplink and the checkout link as soon
+  as a payment is no longer payable.
+- Every versioned endpoint moved from `/api/...` to
   `/api/v1/...`, so clients written against 1.0.0 must change their base path.
   The prefix now lives in one constant
   (`api/lib/src/config/api_routes.dart`), the role guards match the segment
