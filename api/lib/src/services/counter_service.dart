@@ -29,15 +29,19 @@ class CounterService {
 
   Future<int> _nextSeq(String key) async {
     final db = await MongoDb.instance.database;
-    final counters = db.collection('counters');
-    await counters.updateOne(
-      {'_id': key},
-      {
-        r'$inc': {'seq': 1},
-      },
-      upsert: true,
-    );
-    final doc = await counters.findOne({'_id': key});
+    // One round trip that increments and hands back the new value. Incrementing
+    // and then reading lets two tills that ask at the same moment both read the
+    // higher of their two numbers, and one of them is issued a duplicate.
+    final doc = await db
+        .collection('counters')
+        .findAndModify(
+          query: {'_id': key},
+          update: {
+            r'$inc': {'seq': 1},
+          },
+          upsert: true,
+          returnNew: true,
+        );
     final seq = (doc?['seq'] as num?)?.toInt();
     if (seq == null) {
       throw InternalServerException('Failed to generate counter "$key"');

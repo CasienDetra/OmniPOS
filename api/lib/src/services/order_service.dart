@@ -115,8 +115,18 @@ class OrderService {
     // instead of shrinking the shelf.
     await _takeStock(items, enforce: enforceStock);
 
+    // The counter is a separate write and can fail on its own. Without this
+    // guard the stock would stay decremented with no Sale to account for it.
+    final String receiptNumber;
+    try {
+      receiptNumber = await _counters.nextReceiptNumber();
+    } catch (_) {
+      await _releaseStock(items);
+      rethrow;
+    }
+
     final order = Order(
-      receiptNumber: await _counters.nextReceiptNumber(),
+      receiptNumber: receiptNumber,
       cashierId: cashierId,
       platform: platform.isEmpty ? 'Web' : platform,
       totalPrice: totalPrice,

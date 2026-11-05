@@ -414,5 +414,12 @@ void main() {
     test('is the gateway a config can choose', () {
       expect(defaultPaymentProvider(_config()).name, 'payway');
     });
+
+    test('a payment can name the gateway that issued it', () {
+      // Configuration chooses who issues new codes; an existing payment names
+      // the one that can still settle it.
+      expect(defaultPaymentProvider(_config(), name: 'cutluy').name, 'cutluy');
+      expect(defaultPaymentProvider(_config(), name: 'payway').name, 'payway');
+    });
   });
 }

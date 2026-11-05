@@ -277,9 +277,13 @@ String? encodedItemsRemark(List<OrderItem> items, {int maxLength = 500}) {
   return encoded.length > maxLength ? null : encoded;
 }
 
-/// The provider `PAYMENT_PROVIDER` asks for.
-PaymentProvider defaultPaymentProvider(AppConfig config) {
-  return switch (config.paymentProvider.toLowerCase()) {
+/// The provider `PAYMENT_PROVIDER` asks for, or the one [name] names.
+///
+/// [name] exists for the payments a shop already has open: a row records the
+/// gateway that issued it, and that gateway — not today's configuration — is
+/// who can still settle it.
+PaymentProvider defaultPaymentProvider(AppConfig config, {String? name}) {
+  return switch ((name ?? config.paymentProvider).toLowerCase()) {
     'cutluy' => CutluyProvider(config: config),
     'payway' => PaywayProvider(config: config),
     final other => MisconfiguredProvider(other),

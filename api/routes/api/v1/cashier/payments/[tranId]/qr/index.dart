@@ -25,11 +25,18 @@ Future<Response> _get(RequestContext context, String tranId) async {
   if (payment.cashierId != asObjectId(auth.id)) {
     throw const ForbiddenException('This payment belongs to another cashier');
   }
-  if (payment.status != PaymentStatus.pending || payment.qrString.isEmpty) {
-    // A paid or expired code must stop being shown, not keep scanning.
+  final expired = DateTime.now().toUtc().isAfter(payment.expiresAt);
+  if (payment.status != PaymentStatus.pending ||
+      payment.qrString.isEmpty ||
+      expired) {
+    // A paid, closed or timed-out code must stop being shown, not keep
+    // scanning. The row may still say `pending`: nobody has asked the gateway
+    // since the lifetime ran out, and the bank will not honour the code.
+    final why = expired && payment.status == PaymentStatus.pending
+        ? 'has expired'
+        : 'is ${payment.status.name}';
     throw GoneException(
-      'Payment "$tranId" is ${payment.status.name}, so its code is no longer '
-      'displayable',
+      'Payment "$tranId" $why, so its code is no longer displayable',
     );
   }
   return Response(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:mongo_dart/mongo_dart.dart';
 
 import '../config/app_config.dart';
@@ -21,7 +23,8 @@ import 'payment_provider.dart';
 /// Which gateway is behind this is configuration. [PaymentProvider] is the seam
 /// and `PAYMENT_PROVIDER` picks the implementation, so a shop moves between
 /// CutLuy and PayWay without a code change and the routes never learn the
-/// difference.
+/// difference. A payment that already exists is settled by the provider that
+/// issued it, even after that setting has moved on.
 class PaymentService {
   PaymentService({
     OrderService? orders,
@@ -30,12 +33,24 @@ class PaymentService {
     AppConfig? config,
   }) : _orders = orders ?? OrderService(),
        _counters = counters ?? CounterService(),
+       _config = config ?? AppConfig.current,
        _gateway =
-           gateway ?? defaultPaymentProvider(config ?? AppConfig.current);
+           gateway ?? defaultPaymentProvider(config ?? AppConfig.current),
+       _injectedGateway = gateway;
 
   final OrderService _orders;
   final CounterService _counters;
+  final AppConfig _config;
   final PaymentProvider _gateway;
+
+  /// A gateway handed in by a caller, which is then the only one used.
+  final PaymentProvider? _injectedGateway;
+
+  /// Providers built from configuration for payments that name them.
+  final Map<String, PaymentProvider> _providers = {};
+
+  /// Confirmations in progress, by transaction id.
+  final Map<String, Future<void>> _confirming = {};
 
   static const _collection = 'payments';
 
@@ -50,7 +65,7 @@ class PaymentService {
     required String platform,
     required ObjectId cashierId,
   }) async {
-    _requireConfigured();
+    _requireConfigured(_gateway);
     final priced = await _orders.priceCart(cart);
     final currency = _gateway.shopCurrency;
 
@@ -187,11 +202,12 @@ class PaymentService {
     // A payment the gateway has only seen scanned is still open: the customer
     // may confirm it a moment later, and the poll is what finishes the job.
     if (!PaymentStatus.openable.contains(payment.status)) return payment;
-    _requireConfigured();
+    final provider = _providerFor(payment);
+    _requireConfigured(provider);
 
     final GatewayAnswer answer;
     try {
-      answer = await _gateway.lookup(
+      answer = await provider.lookup(
         tranId,
         providerRef: payment.gatewayPaymentId,
       );
@@ -208,18 +224,18 @@ class PaymentService {
       throw ServiceUnavailableException(_unavailableMessage(exception));
     }
     return switch (answer.status) {
-      GatewayStatus.approved => await _confirm(payment, answer),
+      GatewayStatus.approved => await _confirm(payment, answer, provider),
       GatewayStatus.scanned => await _markScanned(payment),
       GatewayStatus.pending => await _settleOrWait(payment),
       GatewayStatus.declined => await _markTerminal(
         payment,
         PaymentStatus.declined,
-        '${_gateway.name}: ${answer.statusName}',
+        '${provider.name}: ${answer.statusName}',
       ),
       GatewayStatus.expired => await _markTerminal(
         payment,
         PaymentStatus.expired,
-        'The transaction was closed at ${_gateway.name} before it was paid',
+        'The transaction was closed at ${provider.name} before it was paid',
       ),
       GatewayStatus.unknown => await _settleOrWait(payment),
     };
@@ -232,13 +248,40 @@ class PaymentService {
   /// machine. PayWay signs nothing, so this hands back a transaction id that is
   /// worth a lookup and nothing more — which is exactly what a
   /// [refresh] treats it as.
+  ///
+  /// The provider that answers is not known until the body names a payment:
+  /// after a gateway switch, a notification from the old one still has to be
+  /// read, so every configured provider gets a turn.
   NotificationPointer readNotification({
     required List<int> rawBody,
     required Map<String, String> headers,
   }) {
-    _requireConfigured();
-    return _gateway.readNotification(rawBody: rawBody, headers: headers);
+    Object? refusal;
+    for (final provider in _notificationReaders()) {
+      try {
+        return provider.readNotification(rawBody: rawBody, headers: headers);
+      } on AppException catch (error) {
+        refusal ??= error;
+      }
+    }
+    if (refusal != null) throw refusal;
+    throw ServiceUnavailableException(_gateway.configurationHint);
   }
+
+  /// Re-reads a delivery as the provider that issued the payment it names.
+  ///
+  /// [readNotification] has to accept a pointer from whichever gateway can
+  /// parse it, because it does not yet know whose delivery this is. Once the
+  /// payment is known its own provider gets the last word, so a signed
+  /// delivery still has to pass the signature check of the gateway that is
+  /// going to be asked about the money.
+  NotificationPointer verifyNotification(
+    Payment payment, {
+    required List<int> rawBody,
+    required Map<String, String> headers,
+  }) => _providerFor(
+    payment,
+  ).readNotification(rawBody: rawBody, headers: headers);
 
   Future<Payment> get(String tranId) async {
     final payment = await find(tranId);
@@ -263,8 +306,18 @@ class PaymentService {
   Future<Payment> _confirm(
     Payment payment,
     GatewayAnswer answer,
+    PaymentProvider provider,
+  ) => _serialized(
+    payment.tranId,
+    () => _confirmOnce(payment, answer, provider),
+  );
+
+  Future<Payment> _confirmOnce(
+    Payment payment,
+    GatewayAnswer answer,
+    PaymentProvider provider,
   ) async {
-    _requireAmountMatches(payment, answer);
+    _requireAmountMatches(payment, answer, provider.name);
 
     final sale = await _saleForPayment(payment);
 
@@ -272,7 +325,11 @@ class PaymentService {
       _collection,
       {
         'tran_id': payment.tranId,
-        'status': {r'$in': _openableNames},
+        // Not just the openable statuses: the gateway's paid answer outranks
+        // an expiry this service guessed at. A row marked expired while the
+        // customer was paying is corrected here rather than leaving the money
+        // with no sale attached.
+        'status': {r'$ne': PaymentStatus.paid.name},
       },
       {
         'status': PaymentStatus.paid.name,
@@ -363,11 +420,15 @@ class PaymentService {
 
   /// Money for a different amount is not this payment, whatever the gateway
   /// says about the transaction id.
-  void _requireAmountMatches(Payment payment, GatewayAnswer answer) {
+  void _requireAmountMatches(
+    Payment payment,
+    GatewayAnswer answer,
+    String provider,
+  ) {
     final settled = answer.chargedAmount;
     if (settled != null && (settled - payment.settledAmount).abs() > 0.001) {
       throw ConflictException(
-        '${_gateway.name} confirmed ${answer.chargedAmount} '
+        '$provider confirmed ${answer.chargedAmount} '
         '${answer.chargedCurrency ?? payment.chargeCurrency ?? 'the same'} '
         'for transaction ${payment.tranId}, which was issued for '
         '${payment.settledAmount}. The sale was not recorded; contact the '
@@ -400,9 +461,65 @@ class PaymentService {
     return '${exception.message} Try again in $wait.';
   }
 
-  void _requireConfigured() {
-    if (!_gateway.isConfigured) {
-      throw ServiceUnavailableException(_gateway.configurationHint);
+  void _requireConfigured(PaymentProvider provider) {
+    if (!provider.isConfigured) {
+      throw ServiceUnavailableException(provider.configurationHint);
+    }
+  }
+
+  /// The gateway that issued [payment].
+  ///
+  /// Configuration picks who issues new codes; the row picks who can still
+  /// settle an existing one. A shop that switched gateways must not be left
+  /// with open payments nobody can ask about.
+  PaymentProvider _providerFor(Payment payment) {
+    if (_injectedGateway != null) return _gateway;
+    final name = payment.provider.toLowerCase();
+    if (name.isEmpty || name == _gateway.name) return _gateway;
+    return _providerForName(name);
+  }
+
+  PaymentProvider _providerForName(String name) => _providers.putIfAbsent(
+    name,
+    () => defaultPaymentProvider(_config, name: name),
+  );
+
+  /// Every provider a delivery could belong to, configured one first.
+  Iterable<PaymentProvider> _notificationReaders() sync* {
+    yield _gateway;
+    if (_injectedGateway != null) return;
+    for (final name in paymentProviderNames) {
+      if (name == _gateway.name) continue;
+      final provider = _providerForName(name);
+      if (provider.isConfigured) yield provider;
+    }
+  }
+
+  /// Runs [action] after any confirmation of the same transaction already in
+  /// flight.
+  ///
+  /// Two confirmations — a notification and the cashier's poll — would
+  /// otherwise both find no Sale and both draw a receipt number, and the loser
+  /// leaves a gap. The unique index still makes a second Sale impossible
+  /// across processes; this keeps one process from wasting the number.
+  Future<T> _serialized<T>(String tranId, Future<T> Function() action) async {
+    final previous = _confirming[tranId];
+    final done = Completer<void>();
+    _confirming[tranId] = done.future;
+    if (previous != null) {
+      try {
+        await previous;
+      } catch (_) {
+        // The confirmation ahead failed; this one is a fresh attempt.
+      }
+    }
+    try {
+      return await action();
+    } finally {
+      done.complete();
+      if (identical(_confirming[tranId], done.future)) {
+        _confirming.remove(tranId);
+      }
     }
   }
 }
