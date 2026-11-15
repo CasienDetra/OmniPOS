@@ -3,7 +3,7 @@
 # The toolchain is pinned so CI, local builds and deployments compile
 # identically. Bump deliberately, together with the base image of the file
 # service and the job containers in .github/workflows/ci.yml.
-FROM dart:3.13.4 AS build
+FROM dart:3.15.0-118.1.beta AS build
 WORKDIR /app
 COPY pubspec.* ./
 RUN dart pub get --enforce-lockfile
